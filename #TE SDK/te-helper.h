@@ -27,6 +27,13 @@ namespace te_sdk::helper
         BYTE packetId = 0;
         BYTE rpcId = 0;
         std::vector<BYTE> payload;
+
+        // Split packet properties
+        uint16_t splitPacketId = 0;
+        uint32_t splitPacketIndex = 0;
+        uint32_t splitPacketCount = 0;
+        uint32_t splitPacketTotalLength = 0;
+        uint16_t maxSplitPacketSize = 0;
     };
 
     // Get current detected SAMP version

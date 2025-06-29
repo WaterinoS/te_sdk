@@ -137,7 +137,30 @@ namespace te_sdk::helper
         if (!bitStream.Read(out.isSplitPacket))
             return false;
 
-        if (!out.isSplitPacket) {
+        if (out.isSplitPacket) {
+            // Read split packet information (NO total length!)
+            if (!bitStream.Read(out.splitPacketId))
+                return false;
+            if (!bitStream.ReadCompressed(out.splitPacketIndex))
+                return false;
+            if (!bitStream.ReadCompressed(out.splitPacketCount))
+                return false;
+
+            // Read fragment data length
+            if (!bitStream.ReadCompressed(out.length))
+                return false;
+
+            // Read fragment data
+            std::vector<BYTE> packetData((out.length + 7) / 8, 0);
+            if (!bitStream.ReadAlignedBytes(packetData.data(), packetData.size()))
+                return false;
+
+            out.payload = packetData;
+
+            out.packetId = 0;
+            out.rpcId = 0;
+        }
+        else {
             if (!bitStream.ReadCompressed(out.length))
                 return false;
 

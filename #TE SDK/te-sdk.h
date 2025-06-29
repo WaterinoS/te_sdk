@@ -29,6 +29,12 @@ namespace te_sdk
         void* rakPeer;
     };
 
+    struct PacketFragment {
+        std::map<uint32_t, std::vector<uint8_t>> fragments;
+        uint32_t expectedFragments = 0;
+        std::chrono::steady_clock::time_point timestamp;
+    };
+
     using RpcCallback = std::function<bool(const RpcContext&)>;
     using PacketCallback = std::function<bool(const PacketContext&)>;
 
@@ -39,6 +45,9 @@ namespace te_sdk
     bool InitRakNetHooks();
 
     int WINAPI hkWSARecvFrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesRecvd, LPDWORD lpFlags, struct sockaddr* lpFrom, LPINT lpFromlen, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
+
+    bool ProcessCompletePacket(const std::vector<uint8_t>& data);
+    bool ProcessCompleteRPC(const helper::ExtractedRPC& rpc);
 
     extern TERakClient* LocalClient;
     extern tWSARecvFrom oWSARecvFrom;
