@@ -103,9 +103,10 @@ namespace te_sdk
         if (result == 0 && lpNumberOfBytesRecvd && *lpNumberOfBytesRecvd > 0 && lpBuffers && lpBuffers->len > 0)
         {
             helper::ExtractedRPC rpc;
-            if (LocalClient && LocalClient->GetInterface() &&
-                helper::ExtractRPCData(reinterpret_cast<const char*>(lpBuffers->buf), *lpNumberOfBytesRecvd, rpc))
-            {
+            bool isRpcPacket = LocalClient && LocalClient->GetInterface() &&
+                helper::ExtractRPCData(reinterpret_cast<const char*>(lpBuffers->buf), *lpNumberOfBytesRecvd, rpc);
+
+            if (isRpcPacket) {
                 std::lock_guard<std::mutex> lock(g_packetMutex);
                 bool shouldBlock = false;
 
@@ -114,13 +115,17 @@ namespace te_sdk
                     uint16_t splitId = rpc.splitPacketId;
                     auto& fragment = g_incompletePackets[splitId];
 
+                    // Log every split packet fragment for debugging
+                    //Log("[te_sdk] Received split packet fragment - ID: %d, Index: %d/%d, Fragment size: %d",
+                    //    splitId, rpc.splitPacketIndex, rpc.splitPacketCount, rpc.payload.size());
+
                     // Initialize on first fragment
                     if (fragment.expectedFragments == 0) {
                         fragment.expectedFragments = rpc.splitPacketCount;
                         fragment.timestamp = std::chrono::steady_clock::now();
 
-                        Log("[te_sdk] Started reassembly of split packet ID %d, expected fragments: %d",
-                            splitId, fragment.expectedFragments);
+                       /* Log("[te_sdk] Started reassembly of split packet ID %d, expected fragments: %d",
+                            splitId, fragment.expectedFragments);*/
                     }
 
                     // Validate fragment data
@@ -136,28 +141,28 @@ namespace te_sdk
                         // Store fragment data
                         fragment.fragments[rpc.splitPacketIndex] = rpc.payload;
 
-                        /*Log("[te_sdk] Received fragment %d/%d for packet %d (size: %d)",
-                            rpc.splitPacketIndex + 1, fragment.expectedFragments, splitId, rpc.payload.size());*/
+                       /* Log("[te_sdk] Stored fragment %d/%d for packet %d (size: %d), total collected: %d",
+                            rpc.splitPacketIndex + 1, fragment.expectedFragments, splitId, rpc.payload.size(),
+                            fragment.fragments.size());*/
 
                         // Check if packet is complete
                         if (fragment.fragments.size() == fragment.expectedFragments) {
                             Log("[te_sdk] Split packet %d is complete, reassembling %d fragments (estimated size: %d KB)...",
                                 splitId, fragment.expectedFragments,
-                                (fragment.expectedFragments * 1400) / 1024); // Estimate based on typical fragment size
+                                (fragment.expectedFragments * 1400) / 1024);
 
-                            // Reassemble with progress for large packets
+                            // Reassemble fragments
                             std::vector<uint8_t> completeData;
-                            size_t estimatedSize = fragment.expectedFragments * 1400; // Rough estimate
-                            completeData.reserve(estimatedSize); // Pre-allocate memory
+                            size_t estimatedSize = fragment.expectedFragments * 1400;
+                            completeData.reserve(estimatedSize);
 
                             for (uint32_t i = 0; i < fragment.expectedFragments; ++i) {
                                 auto it = fragment.fragments.find(i);
                                 if (it != fragment.fragments.end()) {
                                     completeData.insert(completeData.end(), it->second.begin(), it->second.end());
 
-                                    // Log progress for very large packets
                                     if (fragment.expectedFragments > 100 && (i + 1) % 50 == 0) {
-                                        Log("[te_sdk] Reassembly progress: %d/%d fragments", i + 1, fragment.expectedFragments);
+                                       // Log("[te_sdk] Reassembly progress: %d/%d fragments", i + 1, fragment.expectedFragments);
                                     }
                                 }
                                 else {
@@ -167,7 +172,7 @@ namespace te_sdk
                             }
 
                             if (completeData.size() > 0) {
-                                Log("[te_sdk] Reassembled packet %d, total size: %d KB", splitId, completeData.size() / 1024);
+                               // Log("[te_sdk] Reassembled packet %d, total size: %d KB", splitId, completeData.size() / 1024);
                                 if (!ProcessCompletePacket(completeData)) {
                                     shouldBlock = true;
                                 }
@@ -178,17 +183,20 @@ namespace te_sdk
                     }
                 }
                 else {
-                    // Process complete (non-split) packet
+                    // Process complete (non-split) RPC packet
+
                     if (!ProcessCompleteRPC(rpc)) {
                         shouldBlock = true;
                     }
                 }
 
-                // Cleanup old fragments (30 second timeout)
+                // Cleanup old fragments
                 auto now = std::chrono::steady_clock::now();
                 for (auto it = g_incompletePackets.begin(); it != g_incompletePackets.end();) {
-                    if (std::chrono::duration_cast<std::chrono::seconds>(now - it->second.timestamp).count() > 30) {
-                        Log("[te_sdk] Timeout for split packet %d", it->first);
+                    auto timeElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - it->second.timestamp).count();
+                    if (timeElapsed > 60) {
+                        Log("[te_sdk] Timeout for split packet %d (elapsed: %d seconds, fragments: %d/%d)",
+                            it->first, timeElapsed, it->second.fragments.size(), it->second.expectedFragments);
                         it = g_incompletePackets.erase(it);
                     }
                     else {
@@ -201,14 +209,18 @@ namespace te_sdk
                     if (lpNumberOfBytesRecvd) {
                         *lpNumberOfBytesRecvd = 0;
                     }
-
                     if (lpFlags) {
-                        *lpFlags |= MSG_DONTROUTE; // Indicate that this packet should not be routed
-					}
-
+                        *lpFlags |= MSG_DONTROUTE;
+                    }
                     WSASetLastError(WSAEWOULDBLOCK);
                     return 0;
                 }
+            }
+            else {
+                //if (*lpNumberOfBytesRecvd > 500) {
+                //    Log("[te_sdk] Received non-RPC packet of size %d bytes (might be part of larger sequence)",
+                //        *lpNumberOfBytesRecvd);
+                //}
             }
         }
 
