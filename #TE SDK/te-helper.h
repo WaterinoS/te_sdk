@@ -16,6 +16,19 @@ namespace te_sdk::helper
         R5
     };
 
+    struct ExtractedRPC {
+        bool hasAcks = false;
+        uint16_t msgNum = 0;
+        uint8_t reliability = 0;
+        uint8_t orderingChannel = 0;
+        uint16_t orderingIndex = 0;
+        bool isSplitPacket = false;
+        uint16_t length = 0;
+        BYTE packetId = 0;
+        BYTE rpcId = 0;
+        std::vector<BYTE> payload;
+    };
+
     // Get current detected SAMP version
     SAMPVersion GetSAMPVersion();
 
@@ -24,4 +37,12 @@ namespace te_sdk::helper
 
     // Returns RakClientInterface pointer based on version
     void* GetRakNetInterface();
+
+	// Initialize WSA hooks
+    bool AttachWSAHooks();
+
+    std::string TranslateSAMPVersion(SAMPVersion version);
+
+	// Extract RPC data from a given data buffer
+    bool ExtractRPCData(const char* data, int len, ExtractedRPC& out);
 }

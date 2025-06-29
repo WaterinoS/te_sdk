@@ -1,5 +1,7 @@
-#include "te-helper.h"
-#include <Windows.h>
+#include "te-sdk.h"
+
+#include "Detours/detours_x86.h"
+#pragma comment(lib, "Detours/detours_x86.lib")
 
 namespace te_sdk::helper
 {
@@ -89,6 +91,104 @@ namespace te_sdk::helper
         }
 
         return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(sampInfo) + offset);
+    }
+
+    std::string TranslateSAMPVersion(SAMPVersion version)
+    {
+        switch (version)
+        {
+        case SAMPVersion::R1:    return "0.3.7-R1";
+        case SAMPVersion::R2:    return "0.3.7-R2";
+        case SAMPVersion::DL:    return "0.3.DL-R1";
+        case SAMPVersion::R3:    return "0.3.7-R3";
+        case SAMPVersion::R4:    return "0.3.7-R4";
+        case SAMPVersion::R4v2:  return "0.3.7-R4-2";
+        case SAMPVersion::R5:    return "0.3.7-R5";
+        default:                 return "Unknown";
+        }
+    }
+
+    bool ExtractRPCData(const char* data, int len, ExtractedRPC& out) {
+        if (!data || len <= 0)
+            return false;
+
+        BitStream bitStream(reinterpret_cast<unsigned char*>(const_cast<char*>(data)), len, false);
+
+        if (!bitStream.Read(out.hasAcks))
+            return false;
+
+        if (!bitStream.Read(out.msgNum))
+            return false;
+
+        uint8_t reliabilityBits = 0;
+        if (!bitStream.ReadBits(reinterpret_cast<unsigned char*>(&reliabilityBits), 4))
+            return false;
+        out.reliability = reliabilityBits;
+
+        if (out.reliability == UNRELIABLE_SEQUENCED || out.reliability == RELIABLE_SEQUENCED || out.reliability == RELIABLE_ORDERED) {
+            if (!bitStream.ReadBits(reinterpret_cast<unsigned char*>(&out.orderingChannel), 5))
+                return false;
+            if (!bitStream.Read(reinterpret_cast<char*>(&out.orderingIndex), sizeof(out.orderingIndex)))
+                return false;
+        }
+
+        if (!bitStream.Read(out.isSplitPacket))
+            return false;
+
+        if (!out.isSplitPacket) {
+            if (!bitStream.ReadCompressed(out.length))
+                return false;
+
+            std::vector<BYTE> packetData((out.length + 7) / 8, 0);
+            if (!bitStream.ReadAlignedBytes(packetData.data(), packetData.size()))
+                return false;
+
+            BitStream dataBitStream(packetData.data(), packetData.size(), false);
+
+            if (!dataBitStream.Read(out.packetId))
+                return false;
+
+            if (out.packetId != 20)
+                return false;
+
+            if (!dataBitStream.Read(out.rpcId))
+                return false;
+
+            int unreadBits = dataBitStream.GetNumberOfUnreadBits();
+            int unreadBytes = unreadBits / 8;
+            if (unreadBytes > 0) {
+                out.payload.resize(unreadBytes);
+                if (!dataBitStream.Read(reinterpret_cast<char*>(out.payload.data()), unreadBytes))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool AttachWSAHooks()
+    {
+        HMODULE ws2_32 = GetModuleHandleW(L"ws2_32.dll");
+        if (!ws2_32) return false;
+
+        oWSARecvFrom = reinterpret_cast<tWSARecvFrom>(GetProcAddress(ws2_32, "WSARecvFrom"));
+
+        if (!oWSARecvFrom) return false;
+
+        LONG error = DetourTransactionBegin();
+        if (error != NO_ERROR) return false;
+
+        DetourUpdateThread(GetCurrentThread());
+        DetourAttach(&(PVOID&)oWSARecvFrom, &te_sdk::hkWSARecvFrom);
+
+        error = DetourTransactionCommit();
+        if (error != NO_ERROR) {
+            DetourTransactionAbort();
+            return false;
+        }
+
+        Log("[te_sdk] WSA hooks attached successfully");
+        return true;
     }
 }
 

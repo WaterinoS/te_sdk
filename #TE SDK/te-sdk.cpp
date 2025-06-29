@@ -1,8 +1,7 @@
 #include "te-sdk.h"
 #include <mutex>
-
-#include <mutex>
 #include <vector>
+
 
 namespace te_sdk::forwarder
 {
@@ -71,6 +70,7 @@ namespace te_sdk
 	using namespace te_sdk::forwarder;
 
     TERakClient* LocalClient = nullptr;
+    tWSARecvFrom oWSARecvFrom;
 
     void RegisterRaknetCallback(HookType type, RpcCallback callback)
     {
@@ -93,6 +93,28 @@ namespace te_sdk
         default: break;
         }
     }
+
+    int WINAPI hkWSARecvFrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesRecvd, LPDWORD lpFlags, struct sockaddr* lpFrom, LPINT lpFromlen, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine)
+    {
+        //helper::Log("[te_sdk] hkWSARecvFrom called");
+
+        helper::ExtractedRPC rpc;
+        if (LocalClient && LocalClient->GetInterface() && lpBuffers && lpBuffers->len > 0 && helper::ExtractRPCData(reinterpret_cast<const char*>(lpBuffers->buf), lpBuffers->len, rpc))
+        {
+            BitStream rpcData(reinterpret_cast<unsigned char*>(rpc.payload.data()), rpc.payload.size(), false);
+            if (g_forwarder.IncomingRpc(rpc.rpcId, &rpcData, LocalClient->GetInterface()))
+            {
+                return oWSARecvFrom(s, lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpFrom, lpFromlen, lpOverlapped, lpCompletionRoutine);
+            }
+            else
+            {
+                return 0;
+            }
+		}
+
+        return oWSARecvFrom(s, lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpFrom, lpFromlen, lpOverlapped, lpCompletionRoutine);
+    }
+
 
     bool InitRakNetHooks()
     {
@@ -117,7 +139,7 @@ namespace te_sdk
             return false;
 		}
 
-        Log("[te_sdk] Detected SAMP version: %d", static_cast<int>(version));
+        Log("[te_sdk] Detected SAMP version: %s", TranslateSAMPVersion(version).c_str());
         Log("[te_sdk] SAMP info found at %p", sampInfo);
 
         Log("[te_sdk] Initializing RakNet hooks...");
@@ -128,18 +150,20 @@ namespace te_sdk
             return false;
         }
 
-        Log("[te_sdk] RakNet interface found at %p", rak);
+        if (AttachWSAHooks())
+        {
+            LocalClient = new TERakClient(*reinterpret_cast<void**>(rak));
+            auto* hooked = new HookedRakClientInterface();
+            hooked->SetForwarder(&g_forwarder);
 
-        LocalClient = new TERakClient(*reinterpret_cast<void**>(rak));
-        auto* hooked = new HookedRakClientInterface();
-        hooked->SetForwarder(&g_forwarder);
+            DWORD oldProtect;
+            VirtualProtect((void*)rak, sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
+            *reinterpret_cast<void**>(rak) = hooked;
+            VirtualProtect((void*)rak, sizeof(void*), oldProtect, &oldProtect);
 
-        DWORD oldProtect;
-        VirtualProtect((void*)rak, sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
-        *reinterpret_cast<void**>(rak) = hooked;
-        VirtualProtect((void*)rak, sizeof(void*), oldProtect, &oldProtect);
-
-		Log("[te_sdk] RakNet hooks initialized successfully.");
-		return true;
+            Log("[te_sdk] RakNet hooks initialized successfully.");
+            return true;
+        }
+        return false;
     }
 }

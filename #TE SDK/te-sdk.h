@@ -32,11 +32,16 @@ namespace te_sdk
     using RpcCallback = std::function<bool(const RpcContext&)>;
     using PacketCallback = std::function<bool(const PacketContext&)>;
 
+    using tWSARecvFrom = int (WINAPI*)(SOCKET, LPWSABUF, DWORD, LPDWORD, LPDWORD, struct sockaddr*, LPINT, LPWSAOVERLAPPED, LPWSAOVERLAPPED_COMPLETION_ROUTINE);
+
     void RegisterRaknetCallback(HookType type, RpcCallback callback);
     void RegisterRaknetCallback(HookType type, PacketCallback callback);
     bool InitRakNetHooks();
 
+    int WINAPI hkWSARecvFrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesRecvd, LPDWORD lpFlags, struct sockaddr* lpFrom, LPINT lpFromlen, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
+
     extern TERakClient* LocalClient;
+    extern tWSARecvFrom oWSARecvFrom;
 }
 
 namespace te_sdk::forwarder
