@@ -2,7 +2,6 @@
 #include <mutex>
 #include <vector>
 
-
 namespace te_sdk::forwarder
 {
     std::mutex g_mutex;
@@ -23,7 +22,6 @@ namespace te_sdk::forwarder
         return true;
     }
 
-    // NOT SUPPORTED YET
     bool OnIncomingRpc(uint8_t rpcId, void* bitStream, void* rakPeer)
     {
         te_sdk::RpcContext ctx{ rpcId, bitStream, rakPeer };
