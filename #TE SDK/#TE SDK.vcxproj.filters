@@ -1,0 +1,90 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{0a596880-c0fe-4a79-a5b2-53dbd5aa8a7b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="components">
+      <UniqueIdentifier>{ea4ec01a-e5b1-4137-9bd3-1bc9e66449b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{73d4f6a4-db7d-4ca3-88a0-7fe8d0a8c951}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="te-sdk.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\BitStream.h">
+      <Filter>components</Filter>
+    </ClInclude>
+    <ClInclude Include="te-inc.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\NetworkTypes.h">
+      <Filter>components</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\RakClientInterface.h">
+      <Filter>components</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\RakNetDefines.h">
+      <Filter>components</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\Export.h">
+      <Filter>components</Filter>
+    </ClInclude>
+    <ClInclude Include="te-helper.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="te-logger.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="te-rakclient.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\RakNetStatistics.h">
+      <Filter>components</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\PacketPriority.h">
+      <Filter>components</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\PacketEnumerations.h">
+      <Filter>components</Filter>
+    </ClInclude>
+    <ClInclude Include="te-hookedrakclient.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="FullRakNet\GetTime.h">
+      <Filter>components</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="FullRakNet\BitStream.cpp">
+      <Filter>components</Filter>
+    </ClCompile>
+    <ClCompile Include="FullRakNet\NetworkTypes.cpp">
+      <Filter>components</Filter>
+    </ClCompile>
+    <ClCompile Include="te-sdk.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="te-helper.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="te-logger.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="FullRakNet\RakNetStatistics.cpp">
+      <Filter>components</Filter>
+    </ClCompile>
+    <ClCompile Include="te-rakclient.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="te-hookedrakclient.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="FullRakNet\GetTime.cpp">
+      <Filter>components</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

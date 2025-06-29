@@ -39,3 +39,7 @@
 
 # debug information files
 *.dwo
+/.vs
+/#TE SDK/#TE SDK/Debug
+/#TE SDK/.vs/#TE SDK
+/#TE SDK/Build
