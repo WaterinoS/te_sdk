@@ -66,6 +66,7 @@ namespace te_sdk::forwarder
 namespace te_sdk
 {
 	using namespace te_sdk::forwarder;
+    using namespace te_sdk::helper::logging;
 
     TERakClient* LocalClient = nullptr;
     tWSARecvFrom oWSARecvFrom;

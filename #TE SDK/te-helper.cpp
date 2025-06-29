@@ -5,6 +5,8 @@
 
 namespace te_sdk::helper
 {
+	using namespace te_sdk::helper::logging;
+
     static uintptr_t GetModuleBase(const wchar_t* moduleName)
     {
         return reinterpret_cast<uintptr_t>(GetModuleHandleW(moduleName));
