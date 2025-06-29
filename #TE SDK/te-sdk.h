@@ -29,24 +29,12 @@ namespace te_sdk
         void* rakPeer;
     };
 
-    enum class SAMPVersion
-    {
-        Unknown = 0,
-        R1,
-        R2,
-        DL,
-        R3,
-        R4,
-        R4v2,
-        R5
-    };
-
     using RpcCallback = std::function<bool(const RpcContext&)>;
     using PacketCallback = std::function<bool(const PacketContext&)>;
 
     void RegisterRaknetCallback(HookType type, RpcCallback callback);
     void RegisterRaknetCallback(HookType type, PacketCallback callback);
-    void InitRakNetHooks();
+    bool InitRakNetHooks();
 
     extern TERakClient* LocalClient;
 }

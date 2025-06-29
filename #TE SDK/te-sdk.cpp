@@ -93,17 +93,40 @@ namespace te_sdk
         }
     }
 
-    void InitRakNetHooks()
+    bool InitRakNetHooks()
     {
         using namespace te_sdk_helper;
+
+        if (LocalClient)
+        {
+            Log("[te_sdk] RakNet hooks already initialized.");
+            return false;
+		}
 
         void* rak = GetRakNetInterface();
         if (!rak)
         {
-            Log("[te_sdk] RakNet interface not found. Hooking aborted.");
-            return;
+            return false;
         }
 
+        SAMPVersion version = GetSAMPVersion();
+        if (version == SAMPVersion::Unknown)
+        {
+            Log("[te_sdk] Unsupported SAMP version. Hooking aborted.");
+            return false;
+        }
+
+		auto sampInfo = GetSAMPInfo();
+        if (!sampInfo)
+        {
+            Log("[te_sdk] SAMP info not found. Hooking aborted.");
+            return false;
+		}
+
+        Log("[te_sdk] Initializing RakNet hooks...");
+
+        Log("[te_sdk] Detected SAMP version: %d", static_cast<int>(version));
+		Log("[te_sdk] SAMP info found at %p", sampInfo);
         Log("[te_sdk] RakNet interface found at %p", rak);
 
         LocalClient = new TERakClient(rak);
@@ -112,6 +135,7 @@ namespace te_sdk
 
         *reinterpret_cast<void**>(rak) = hooked;
 
-        Log("[te_sdk] HookedRakClientInterface installed successfully.");
+		Log("[te_sdk] RakNet hooks initialized successfully.");
+		return true;
     }
 }
