@@ -205,6 +205,9 @@ namespace te_sdk
                     if (lpFlags) {
                         *lpFlags |= MSG_DONTROUTE; // Indicate that this packet should not be routed
 					}
+
+                    WSASetLastError(WSAEWOULDBLOCK);
+                    return 0;
                 }
             }
         }
