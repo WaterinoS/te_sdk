@@ -4,7 +4,7 @@
 #include <cstdarg>
 #include <filesystem>
 
-namespace te_sdk_helper
+namespace te_sdk::helper
 {
     void Log(const char* fmt, ...)
     {

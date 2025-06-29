@@ -36,6 +36,8 @@ bool HookedRakClientInterface::HasPassword(void) const
 
 bool HookedRakClientInterface::Send(const char* data, int length, PacketPriority priority, PacketReliability reliability, char orderingChannel)
 {
+	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::Send called");
+
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (data && length > 0 && forwarder)
@@ -54,6 +56,7 @@ bool HookedRakClientInterface::Send(const char* data, int length, PacketPriority
 
 bool HookedRakClientInterface::Send(BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel)
 {
+	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::Send called");
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (bitStream && forwarder)
@@ -69,45 +72,50 @@ bool HookedRakClientInterface::Send(BitStream* bitStream, PacketPriority priorit
     return LocalClient->GetInterface()->Send(bitStream, priority, reliability, orderingChannel);
 }
 
-Packet* HookedRakClientInterface::Receive(void)
+bool IsValidPtr(void* ptr, size_t size = 4)
 {
-    Packet* p = LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->Receive() : nullptr;
-
-    if (p && p->data && p->length > 0 && forwarder)
+    MEMORY_BASIC_INFORMATION mbi;
+    if (!ptr) return false;
+    if (VirtualQuery(ptr, &mbi, sizeof(mbi)))
     {
+        DWORD protect = mbi.Protect & 0xFF;
+        if ((protect == PAGE_READWRITE || protect == PAGE_EXECUTE_READWRITE || protect == PAGE_READONLY || protect == PAGE_EXECUTE_READ))
+        {
+            if (!(mbi.Protect & PAGE_GUARD) && !(mbi.Protect & PAGE_NOACCESS))
+                return true;
+        }
+    }
+    return false;
+}
+
+DataPacket* HookedRakClientInterface::Receive(void)
+{
+    DataPacket* p = LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->Receive() : nullptr;
+
+    while (p != nullptr)
+    {
+        if (!IsValidPtr(p, sizeof(DataPacket)))
+            break;
+
+        if (!p->data || !IsValidPtr(p->data, p->length) || p->length == 0)
+            break;
+
         uint8_t packetId = p->data[0];
 
-        if (packetId == PacketEnumeration::ID_RPC)
-        {
-            if (p->length >= 2)
-            {
-                BitStream bs(p->data, p->length, false);
-                bs.IgnoreBits(8);
+        BitStream bs(p->data, p->length, false);
+        bs.Read(packetId);
 
-                uint8_t rpcId;
-                if (bs.Read(rpcId))
-                {
-                    if (!forwarder->IncomingRpc(rpcId, &bs, this))
-                    {
-                        return nullptr;
-                    }
-                }
-            }
-        }
-        else
-        {
-            BitStream bs(p->data, p->length, false);
-            if (!forwarder->IncomingPacket(packetId, &bs, this))
-            {
-                return nullptr;
-            }
-        }
+        if (forwarder && forwarder->IncomingPacket(packetId, &bs, this))
+            break;
+
+        LocalClient->GetInterface()->DeallocatePacket(p);
+        p = LocalClient->GetInterface()->Receive();
     }
 
     return p;
 }
 
-void HookedRakClientInterface::DeallocatePacket(Packet* packet)
+void HookedRakClientInterface::DeallocatePacket(DataPacket* packet)
 {
     if (LocalClient && LocalClient->GetInterface())
         LocalClient->GetInterface()->DeallocatePacket(packet);
@@ -197,6 +205,8 @@ void HookedRakClientInterface::UnregisterAsRemoteProcedureCall(int* uniqueID)
 
 bool HookedRakClientInterface::RPC(int* uniqueID, const char* data, unsigned int bitLength, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp)
 {
+	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::RPC called");
+
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (uniqueID && data && bitLength > 0 && forwarder)
@@ -213,6 +223,8 @@ bool HookedRakClientInterface::RPC(int* uniqueID, const char* data, unsigned int
 
 bool HookedRakClientInterface::RPC(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp)
 {
+	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::RPC called");
+
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (uniqueID && bitStream && forwarder)
@@ -228,6 +240,8 @@ bool HookedRakClientInterface::RPC(int* uniqueID, BitStream* bitStream, PacketPr
 
 bool HookedRakClientInterface::RPC_(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp, NetworkID networkID)
 {
+	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::RPC_ called");
+
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (uniqueID && bitStream && forwarder)
@@ -322,7 +336,7 @@ const char* HookedRakClientInterface::PlayerIDToDottedIP(PlayerID playerId) cons
     return LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->PlayerIDToDottedIP(playerId) : "";
 }
 
-void HookedRakClientInterface::PushBackPacket(Packet* packet, bool pushAtHead)
+void HookedRakClientInterface::PushBackPacket(DataPacket* packet, bool pushAtHead)
 {
     if (LocalClient && LocalClient->GetInterface())
         LocalClient->GetInterface()->PushBackPacket(packet, pushAtHead);

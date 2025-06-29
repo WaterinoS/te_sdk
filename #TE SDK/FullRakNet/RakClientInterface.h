@@ -91,7 +91,7 @@ public:
 	/// User-thread functions, such as RPC calls and the plugin function PluginInterface::Update occur here.
 	/// \return 0 if no packets are waiting to be handled, otherwise a pointer to a packet.
 	// sa CoreNetworkStructures.h contains struct Packet
-	virtual Packet* Receive( void )=0;
+	virtual DataPacket* Receive( void )=0;
 
 	/// Call this to deallocate a packet returned by Receive when you are done handling it.
 	/// \param[in] packet The packet to deallocate.	

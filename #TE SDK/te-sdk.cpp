@@ -24,6 +24,7 @@ namespace te_sdk::forwarder
         return true;
     }
 
+    // NOT SUPPORTED YET
     bool OnIncomingRpc(uint8_t rpcId, void* bitStream, void* rakPeer)
     {
         te_sdk::RpcContext ctx{ rpcId, bitStream, rakPeer };
@@ -95,19 +96,13 @@ namespace te_sdk
 
     bool InitRakNetHooks()
     {
-        using namespace te_sdk_helper;
+        using namespace te_sdk::helper;
 
         if (LocalClient)
         {
             Log("[te_sdk] RakNet hooks already initialized.");
             return false;
 		}
-
-        void* rak = GetRakNetInterface();
-        if (!rak)
-        {
-            return false;
-        }
 
         SAMPVersion version = GetSAMPVersion();
         if (version == SAMPVersion::Unknown)
@@ -119,21 +114,30 @@ namespace te_sdk
 		auto sampInfo = GetSAMPInfo();
         if (!sampInfo)
         {
-            Log("[te_sdk] SAMP info not found. Hooking aborted.");
             return false;
 		}
 
-        Log("[te_sdk] Initializing RakNet hooks...");
-
         Log("[te_sdk] Detected SAMP version: %d", static_cast<int>(version));
-		Log("[te_sdk] SAMP info found at %p", sampInfo);
+        Log("[te_sdk] SAMP info found at %p", sampInfo);
+
+        Log("[te_sdk] Initializing RakNet hooks...");
+        void* rak = GetRakNetInterface();
+        if (!rak)
+        {
+			Log("[te_sdk] RakNet interface is not available.");
+            return false;
+        }
+
         Log("[te_sdk] RakNet interface found at %p", rak);
 
-        LocalClient = new TERakClient(rak);
+        LocalClient = new TERakClient(*reinterpret_cast<void**>(rak));
         auto* hooked = new HookedRakClientInterface();
         hooked->SetForwarder(&g_forwarder);
 
+        DWORD oldProtect;
+        VirtualProtect((void*)rak, sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
         *reinterpret_cast<void**>(rak) = hooked;
+        VirtualProtect((void*)rak, sizeof(void*), oldProtect, &oldProtect);
 
 		Log("[te_sdk] RakNet hooks initialized successfully.");
 		return true;

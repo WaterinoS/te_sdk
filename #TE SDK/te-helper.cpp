@@ -1,7 +1,7 @@
 #include "te-helper.h"
 #include <Windows.h>
 
-namespace te_sdk_helper
+namespace te_sdk::helper
 {
     static uintptr_t GetModuleBase(const wchar_t* moduleName)
     {
@@ -64,7 +64,7 @@ namespace te_sdk_helper
         default: return nullptr;
         }
 
-        return reinterpret_cast<void*>(sampBase + offset);
+        return *reinterpret_cast<void**>(sampBase + offset);
     }
 
     void* GetRakNetInterface()
@@ -88,7 +88,7 @@ namespace te_sdk_helper
         default: return nullptr;
         }
 
-        return *reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(sampInfo) + offset);
+        return reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(sampInfo) + offset);
     }
 }
 

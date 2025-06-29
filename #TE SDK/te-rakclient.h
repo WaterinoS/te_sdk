@@ -19,8 +19,8 @@ public:
     virtual bool HasPassword(void) const = 0;
     virtual bool Send(const char*, int, PacketPriority, PacketReliability, char) = 0;
     virtual bool Send(BitStream*, PacketPriority, PacketReliability, char) = 0;
-    virtual Packet* Receive(void) = 0;
-    virtual void DeallocatePacket(Packet*) = 0;
+    virtual DataPacket* Receive(void) = 0;
+    virtual void DeallocatePacket(DataPacket*) = 0;
     virtual void PingServer(void) = 0;
     virtual void PingServer(const char*, unsigned short, unsigned short, bool) = 0;
     virtual int GetAveragePing(void) = 0;
@@ -54,7 +54,7 @@ public:
     virtual PlayerID GetPlayerID(void) const = 0;
     virtual PlayerID GetInternalID(void) const = 0;
     virtual const char* PlayerIDToDottedIP(PlayerID) const = 0;
-    virtual void PushBackPacket(Packet*, bool) = 0;
+    virtual void PushBackPacket(DataPacket*, bool) = 0;
     virtual void SetRouterInterface(void*) = 0;
     virtual void RemoveRouterInterface(void*) = 0;
     virtual void SetTimeoutTime(RakNetTime) = 0;

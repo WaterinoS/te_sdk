@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace te_sdk_helper
+namespace te_sdk::helper
 {
     enum class SAMPVersion
     {
