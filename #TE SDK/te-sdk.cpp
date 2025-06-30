@@ -10,7 +10,7 @@
 
 namespace te_sdk::forwarder
 {
-    std::mutex g_mutex;
+    std::recursive_mutex g_mutex;
 
     std::vector<te_sdk::RpcCallback> g_outgoingRpcCallbacks;
     std::vector<te_sdk::RpcCallback> g_incomingRpcCallbacks;
@@ -20,7 +20,13 @@ namespace te_sdk::forwarder
     bool OnOutgoingRpc(uint8_t rpcId, void* bitStream, void* rakPeer)
     {
         te_sdk::RpcContext ctx{ rpcId, bitStream, rakPeer };
-        std::lock_guard<std::mutex> lock(g_mutex);
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+
+        // If no callbacks are registered, allow the RPC to proceed
+        if (g_outgoingRpcCallbacks.empty()) {
+            return true;
+        }
+
         for (auto& cb : g_outgoingRpcCallbacks)
             if (!cb(ctx))
                 return false;
@@ -31,7 +37,13 @@ namespace te_sdk::forwarder
     bool OnIncomingRpc(uint8_t rpcId, void* bitStream, void* rakPeer)
     {
         te_sdk::RpcContext ctx{ rpcId, bitStream, rakPeer };
-        std::lock_guard<std::mutex> lock(g_mutex);
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+
+        // If no callbacks are registered, allow the RPC to proceed
+        if (g_incomingRpcCallbacks.empty()) {
+            return true;
+        }
+
         for (auto& cb : g_incomingRpcCallbacks)
             if (!cb(ctx))
                 return false;
@@ -42,7 +54,13 @@ namespace te_sdk::forwarder
     bool OnOutgoingPacket(uint8_t packetId, void* bitStream, void* rakPeer)
     {
         te_sdk::PacketContext ctx{ packetId, bitStream, rakPeer };
-        std::lock_guard<std::mutex> lock(g_mutex);
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+
+        // If no callbacks are registered, allow the packet to proceed
+        if (g_outgoingPacketCallbacks.empty()) {
+            return true;
+        }
+
         for (auto& cb : g_outgoingPacketCallbacks)
             if (!cb(ctx))
                 return false;
@@ -53,7 +71,13 @@ namespace te_sdk::forwarder
     bool OnIncomingPacket(uint8_t packetId, void* bitStream, void* rakPeer)
     {
         te_sdk::PacketContext ctx{ packetId, bitStream, rakPeer };
-        std::lock_guard<std::mutex> lock(g_mutex);
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+
+        // If no callbacks are registered, allow the packet to proceed
+        if (g_incomingPacketCallbacks.empty()) {
+            return true;
+        }
+
         for (auto& cb : g_incomingPacketCallbacks)
             if (!cb(ctx))
                 return false;
@@ -82,7 +106,8 @@ namespace te_sdk
 
     void RegisterRaknetCallback(HookType type, RpcCallback callback)
     {
-        std::lock_guard<std::mutex> lock(g_mutex);
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+
         switch (type)
         {
         case HookType::OutgoingRpc:    g_outgoingRpcCallbacks.push_back(callback); break;
@@ -93,7 +118,8 @@ namespace te_sdk
 
     void RegisterRaknetCallback(HookType type, PacketCallback callback)
     {
-        std::lock_guard<std::mutex> lock(g_mutex);
+        std::lock_guard<std::recursive_mutex> lock(g_mutex);
+
         switch (type)
         {
         case HookType::OutgoingPacket: g_outgoingPacketCallbacks.push_back(callback); break;
