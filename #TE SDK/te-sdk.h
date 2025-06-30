@@ -31,14 +31,14 @@ namespace te_sdk
 
     using RpcCallback = std::function<bool(const RpcContext&)>;
     using PacketCallback = std::function<bool(const PacketContext&)>;
-    using tHandleRpcPacket = bool(__cdecl*)(void* rp, const char* data, int length, PlayerID playerid);
+    using tHandleRpcPacket = bool(__thiscall*)(void* rp, const char* data, int length, PlayerID playerid);
 
     void RegisterRaknetCallback(HookType type, RpcCallback callback);
     void RegisterRaknetCallback(HookType type, PacketCallback callback);
     bool InitRakNetHooks();
 
     // RPC hook function
-    bool __cdecl hkHandleRpcPacket(void* rp, const char* data, int length, PlayerID playerid);
+    bool __fastcall hkHandleRpcPacket(void* rp, void*, const char* data, int length, PlayerID playerid);
     bool AttachHandleRpcPacketHook();
     bool IsSupportedSAMPVersion(helper::SAMPVersion version);
 

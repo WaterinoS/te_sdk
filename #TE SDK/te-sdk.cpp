@@ -102,7 +102,7 @@ namespace te_sdk
         }
     }
 
-    bool __cdecl hkHandleRpcPacket(void* rp, const char* data, int length, PlayerID playerid) {
+    bool __fastcall hkHandleRpcPacket(void* rp, void*, const char* data, int length, PlayerID playerid) {
         g_rakPeer = rp;
         g_playerId = playerid;
 
@@ -114,24 +114,25 @@ namespace te_sdk
             return false;
         }
 
-        const size_t _MAX_ALLOCA_STACK_ALLOCATION = 1024;
-
         try {
-            // Create BitStream from the incoming data
-            RakNet::BitStream incoming(const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(data)),
-                static_cast<unsigned int>(length), false); // CHANGED: set copyData to false
+            // Create BitStream from the incoming data with copyData=true for safety
+            RakNet::BitStream incoming(std::bit_cast<unsigned char*>(const_cast<char*>(data)),
+                static_cast<unsigned int>(length), true);
 
             unsigned char id = 0;
             unsigned char* input = nullptr;
             unsigned int bits_data = 0;
+            std::shared_ptr<RakNet::BitStream> callback_bs = std::make_shared<RakNet::BitStream>();
 
-            // Skip packet header (first byte is packet ID)
             incoming.IgnoreBits(8);
 
             // Handle timestamp if present
-            if (length > 0 && data[0] == ID_TIMESTAMP) {
+            if (data[0] == ID_TIMESTAMP) {
                 incoming.IgnoreBits(8 * (sizeof(RakNetTime) + sizeof(unsigned char)));
             }
+
+            // Store the offset before reading RPC ID for later reconstruction
+            int offset = incoming.GetReadOffset();
 
             // Read RPC ID
             if (!incoming.Read(id)) {
@@ -145,51 +146,32 @@ namespace te_sdk
                 return oHandleRpcPacket(rp, data, length, playerid);
             }
 
-            // Create BitStream for the callback
-            std::unique_ptr<RakNet::BitStream> callback_bs;
-
+            // Process RPC data if present
             if (bits_data > 0) {
-                // Calculate required bytes
-                unsigned int bytes_needed = BITS_TO_BYTES(bits_data);
-                unsigned int available_bits = incoming.GetNumberOfUnreadBits();
-
-                if (bits_data > available_bits) {
-                    Log("[te_sdk] Invalid data size: requested %u bits, available %u bits", bits_data, available_bits);
-                    return oHandleRpcPacket(rp, data, length, playerid);
-                }
-
-                // Allocate buffer for RPC data
-                bool used_alloca = false;
-
-                if (bytes_needed < _MAX_ALLOCA_STACK_ALLOCATION) {
-                    input = static_cast<unsigned char*>(alloca(bytes_needed));
-                    used_alloca = true;
+                // Calculate required bytes and validate
+                unsigned int bytes_needed = BITS_TO_BYTES(incoming.GetNumberOfUnreadBits());
+                if (bytes_needed >= MAX_ALLOCA_STACK_ALLOCATION) {
+                    input = new unsigned char[bytes_needed];
                 }
                 else {
-                    input = new unsigned char[bytes_needed];
+                    input = std::bit_cast<unsigned char*>(alloca(bytes_needed));
                 }
 
                 // Read the RPC data
                 if (!incoming.ReadBits(input, bits_data, false)) {
                     Log("[te_sdk] Failed to read RPC data bits");
-                    if (!used_alloca) {
+                    if (bytes_needed >= MAX_ALLOCA_STACK_ALLOCATION) {
                         delete[] input;
                     }
-                    return oHandleRpcPacket(rp, data, length, playerid);
+                    return false;
                 }
 
-                // Create BitStream with the extracted data
-                callback_bs = std::make_unique<RakNet::BitStream>(input, bytes_needed, false); // CHANGED: set copyData to false
+                // Create BitStream with the extracted data (copyData=true for callback safety)
+                callback_bs = std::make_shared<RakNet::BitStream>(input, BITS_TO_BYTES(bits_data), true);
 
-                // Clean up allocated memory only if we're not using the data
-                if (!used_alloca) {
-                    // DON'T delete[] input here - the BitStream is using it!
-                    // We'll clean it up after the original function call
+                if (bytes_needed >= MAX_ALLOCA_STACK_ALLOCATION) {
+                    delete[] input;
                 }
-            }
-            else {
-                // Create empty BitStream for RPCs with no data
-                callback_bs = std::make_unique<RakNet::BitStream>();
             }
 
             // Call our incoming RPC callbacks
@@ -199,28 +181,25 @@ namespace te_sdk
             }
             catch (...) {
                 Log("[te_sdk] Exception in RPC callback for RPC ID %d", id);
-                allow_rpc = true; // Allow RPC on callback exception
+                allow_rpc = true;
             }
 
             if (!allow_rpc) {
                 Log("[te_sdk] RPC ID %d blocked by callback", id);
-                // Clean up before returning
-                if (input && bits_data > 0 && BITS_TO_BYTES(bits_data) >= _MAX_ALLOCA_STACK_ALLOCATION) {
-                    delete[] input;
-                }
-                return false; // Block the RPC
+                return false;
             }
 
-            // CRITICAL FIX: Don't reconstruct data if callbacks didn't modify it
-            // Just call the original function with original data
-            bool result = oHandleRpcPacket(rp, data, length, playerid);
+            incoming.SetWriteOffset(offset);
+            incoming.Write(id);
 
-            // Clean up allocated memory
-            if (input && bits_data > 0 && BITS_TO_BYTES(bits_data) >= _MAX_ALLOCA_STACK_ALLOCATION) {
-                delete[] input;
+            bits_data = BYTES_TO_BITS(callback_bs->GetNumberOfBytesUsed());
+            incoming.WriteCompressed(bits_data);
+            if (bits_data > 0) {
+                incoming.WriteBits(callback_bs->GetData(), bits_data, false);
             }
 
-            return result;
+            return oHandleRpcPacket(rp, std::bit_cast<char*>(incoming.GetData()),
+                incoming.GetNumberOfBytesUsed(), playerid);
 
         }
         catch (const std::exception& e) {
