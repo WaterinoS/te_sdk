@@ -114,10 +114,12 @@ namespace te_sdk
             return false;
         }
 
+        const size_t _MAX_ALLOCA_STACK_ALLOCATION = 1024;
+
         try {
             // Create BitStream from the incoming data
             RakNet::BitStream incoming(const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(data)),
-                static_cast<unsigned int>(length), true);
+                static_cast<unsigned int>(length), false); // CHANGED: set copyData to false
 
             unsigned char id = 0;
             unsigned char* input = nullptr;
@@ -130,9 +132,6 @@ namespace te_sdk
             if (length > 0 && data[0] == ID_TIMESTAMP) {
                 incoming.IgnoreBits(8 * (sizeof(RakNetTime) + sizeof(unsigned char)));
             }
-
-            // Save current position to restore later
-            int offset = incoming.GetReadOffset();
 
             // Read RPC ID
             if (!incoming.Read(id)) {
@@ -161,7 +160,6 @@ namespace te_sdk
 
                 // Allocate buffer for RPC data
                 bool used_alloca = false;
-                const size_t _MAX_ALLOCA_STACK_ALLOCATION = 1024;
 
                 if (bytes_needed < _MAX_ALLOCA_STACK_ALLOCATION) {
                     input = static_cast<unsigned char*>(alloca(bytes_needed));
@@ -181,12 +179,12 @@ namespace te_sdk
                 }
 
                 // Create BitStream with the extracted data
-                callback_bs = std::make_unique<RakNet::BitStream>(input, bytes_needed, true);
+                callback_bs = std::make_unique<RakNet::BitStream>(input, bytes_needed, false); // CHANGED: set copyData to false
 
-                // Clean up allocated memory
+                // Clean up allocated memory only if we're not using the data
                 if (!used_alloca) {
-                    delete[] input;
-                    input = nullptr;
+                    // DON'T delete[] input here - the BitStream is using it!
+                    // We'll clean it up after the original function call
                 }
             }
             else {
@@ -206,33 +204,23 @@ namespace te_sdk
 
             if (!allow_rpc) {
                 Log("[te_sdk] RPC ID %d blocked by callback", id);
+                // Clean up before returning
+                if (input && bits_data > 0 && BITS_TO_BYTES(bits_data) >= _MAX_ALLOCA_STACK_ALLOCATION) {
+                    delete[] input;
+                }
                 return false; // Block the RPC
             }
 
-            // Reconstruct the data for the original function
-            incoming.SetWriteOffset(offset);
-            incoming.Write(id);
+            // CRITICAL FIX: Don't reconstruct data if callbacks didn't modify it
+            // Just call the original function with original data
+            bool result = oHandleRpcPacket(rp, data, length, playerid);
 
-            // Write the potentially modified data back
-            unsigned int new_bits_data = BYTES_TO_BITS(callback_bs->GetNumberOfBytesUsed());
-            incoming.WriteCompressed(new_bits_data);
-
-            if (new_bits_data > 0) {
-                if (!callback_bs->GetData()) {
-                    Log("[te_sdk] Invalid callback data pointer");
-                    return oHandleRpcPacket(rp, data, length, playerid);
-                }
-                incoming.WriteBits(callback_bs->GetData(), new_bits_data, false);
+            // Clean up allocated memory
+            if (input && bits_data > 0 && BITS_TO_BYTES(bits_data) >= _MAX_ALLOCA_STACK_ALLOCATION) {
+                delete[] input;
             }
 
-            if (!incoming.GetData() || incoming.GetNumberOfBytesUsed() == 0) {
-                Log("[te_sdk] Invalid reconstructed data");
-                return oHandleRpcPacket(rp, data, length, playerid);
-            }
-
-            // Call original function with potentially modified data
-            return oHandleRpcPacket(rp, reinterpret_cast<const char*>(incoming.GetData()),
-                incoming.GetNumberOfBytesUsed(), playerid);
+            return result;
 
         }
         catch (const std::exception& e) {
