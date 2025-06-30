@@ -8,7 +8,6 @@ using namespace te_sdk;
 bool HookedRakClientInterface::Connect(const char* host, unsigned short serverPort, unsigned short clientPort,
     unsigned int depreciated, int threadSleepTimer)
 {
-    te_sdk::helper::logging::ResetSession();
     te_sdk::helper::logging::Log("[te_sdk] Connecting to %s:%d", host, serverPort);
 
     return LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->Connect(host, serverPort, clientPort, depreciated, threadSleepTimer) : false;

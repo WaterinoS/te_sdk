@@ -218,6 +218,8 @@ namespace te_sdk
     {
         using namespace te_sdk::helper;
 
+        te_sdk::helper::logging::ResetSession();
+
         if (LocalClient)
         {
             Log("[te_sdk] RakNet hooks already initialized.");
