@@ -1,6 +1,12 @@
 #include "te-sdk.h"
+#include "FullRakNet/PacketEnumerations.h"
+
 #include <mutex>
 #include <vector>
+#include <memory>
+
+#include "Detours/detours_x86.h"
+#pragma comment(lib, "Detours/detours_x86.lib")
 
 namespace te_sdk::forwarder
 {
@@ -65,14 +71,14 @@ namespace te_sdk::forwarder
 
 namespace te_sdk
 {
-	using namespace te_sdk::forwarder;
+    using namespace te_sdk::forwarder;
     using namespace te_sdk::helper::logging;
 
     TERakClient* LocalClient = nullptr;
-    tWSARecvFrom oWSARecvFrom;
+    tHandleRpcPacket oHandleRpcPacket = nullptr;
 
-    std::unordered_map<uint16_t, PacketFragment> g_incompletePackets;
-    std::mutex g_packetMutex;
+    void* g_rakPeer = nullptr;
+    PlayerID g_playerId = { 0, 0 };
 
     void RegisterRaknetCallback(HookType type, RpcCallback callback)
     {
@@ -96,220 +102,116 @@ namespace te_sdk
         }
     }
 
-    int WINAPI hkWSARecvFrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesRecvd, LPDWORD lpFlags, struct sockaddr* lpFrom, LPINT lpFromlen, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine)
-    {
-        int result = oWSARecvFrom(s, lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpFrom, lpFromlen, lpOverlapped, lpCompletionRoutine);
+    bool __cdecl hkHandleRpcPacket(void* rp, const char* data, int length, PlayerID playerid) {
+        g_rakPeer = rp;
+        g_playerId = playerid;
 
-        if (result == 0 && lpNumberOfBytesRecvd && *lpNumberOfBytesRecvd > 0 && lpBuffers && lpBuffers->len > 0)
-        {
-            helper::ExtractedRPC rpc;
-            bool isRpcPacket = LocalClient && LocalClient->GetInterface() &&
-                helper::ExtractRPCData(reinterpret_cast<const char*>(lpBuffers->buf), *lpNumberOfBytesRecvd, rpc);
-
-            if (isRpcPacket) {
-                std::lock_guard<std::mutex> lock(g_packetMutex);
-                bool shouldBlock = false;
-
-                if (rpc.isSplitPacket) {
-                    // Process split packet fragments
-                    uint16_t splitId = rpc.splitPacketId;
-                    auto& fragment = g_incompletePackets[splitId];
-
-                    // Log every split packet fragment for debugging
-                    //Log("[te_sdk] Received split packet fragment - ID: %d, Index: %d/%d, Fragment size: %d",
-                    //    splitId, rpc.splitPacketIndex, rpc.splitPacketCount, rpc.payload.size());
-
-                    // Initialize on first fragment
-                    if (fragment.expectedFragments == 0) {
-                        fragment.expectedFragments = rpc.splitPacketCount;
-                        fragment.timestamp = std::chrono::steady_clock::now();
-
-                       /* Log("[te_sdk] Started reassembly of split packet ID %d, expected fragments: %d",
-                            splitId, fragment.expectedFragments);*/
-                    }
-
-                    // Validate fragment data
-                    if (rpc.splitPacketIndex >= fragment.expectedFragments) {
-                        Log("[te_sdk] Invalid split packet index %d for packet %d (expected < %d)",
-                            rpc.splitPacketIndex, splitId, fragment.expectedFragments);
-                        g_incompletePackets.erase(splitId);
-                    }
-                    else if (fragment.fragments.find(rpc.splitPacketIndex) != fragment.fragments.end()) {
-                        Log("[te_sdk] Duplicate fragment %d for packet %d", rpc.splitPacketIndex, splitId);
-                    }
-                    else {
-                        // Store fragment data
-                        fragment.fragments[rpc.splitPacketIndex] = rpc.payload;
-
-                       /* Log("[te_sdk] Stored fragment %d/%d for packet %d (size: %d), total collected: %d",
-                            rpc.splitPacketIndex + 1, fragment.expectedFragments, splitId, rpc.payload.size(),
-                            fragment.fragments.size());*/
-
-                        // Check if packet is complete
-                        if (fragment.fragments.size() == fragment.expectedFragments) {
-                            Log("[te_sdk] Split packet %d is complete, reassembling %d fragments (estimated size: %d KB)...",
-                                splitId, fragment.expectedFragments,
-                                (fragment.expectedFragments * 1400) / 1024);
-
-                            // Reassemble fragments
-                            std::vector<uint8_t> completeData;
-                            size_t estimatedSize = fragment.expectedFragments * 1400;
-                            completeData.reserve(estimatedSize);
-
-                            for (uint32_t i = 0; i < fragment.expectedFragments; ++i) {
-                                auto it = fragment.fragments.find(i);
-                                if (it != fragment.fragments.end()) {
-                                    completeData.insert(completeData.end(), it->second.begin(), it->second.end());
-
-                                    if (fragment.expectedFragments > 100 && (i + 1) % 50 == 0) {
-                                       // Log("[te_sdk] Reassembly progress: %d/%d fragments", i + 1, fragment.expectedFragments);
-                                    }
-                                }
-                                else {
-                                    Log("[te_sdk] Missing fragment %d for packet %d", i, splitId);
-                                    break;
-                                }
-                            }
-
-                            if (completeData.size() > 0) {
-                               // Log("[te_sdk] Reassembled packet %d, total size: %d KB", splitId, completeData.size() / 1024);
-                                if (!ProcessCompletePacket(completeData)) {
-                                    shouldBlock = true;
-                                }
-                            }
-
-                            g_incompletePackets.erase(splitId);
-                        }
-                    }
-                }
-                else {
-                    // Process complete (non-split) RPC packet
-
-                    if (!ProcessCompleteRPC(rpc)) {
-                        shouldBlock = true;
-                    }
-                }
-
-                // Cleanup old fragments
-                auto now = std::chrono::steady_clock::now();
-                for (auto it = g_incompletePackets.begin(); it != g_incompletePackets.end();) {
-                    auto timeElapsed = std::chrono::duration_cast<std::chrono::seconds>(now - it->second.timestamp).count();
-                    if (timeElapsed > 60) {
-                        Log("[te_sdk] Timeout for split packet %d (elapsed: %d seconds, fragments: %d/%d)",
-                            it->first, timeElapsed, it->second.fragments.size(), it->second.expectedFragments);
-                        it = g_incompletePackets.erase(it);
-                    }
-                    else {
-                        ++it;
-                    }
-                }
-
-                // Block packet if callback returned false
-                if (shouldBlock) {
-                    if (lpNumberOfBytesRecvd) {
-                        *lpNumberOfBytesRecvd = 0;
-                    }
-                    if (lpFlags) {
-                        *lpFlags |= MSG_DONTROUTE;
-                    }
-                    WSASetLastError(WSAEWOULDBLOCK);
-                    return 0;
-                }
-            }
-            else {
-                //if (*lpNumberOfBytesRecvd > 500) {
-                //    Log("[te_sdk] Received non-RPC packet of size %d bytes (might be part of larger sequence)",
-                //        *lpNumberOfBytesRecvd);
-                //}
-            }
-        }
-
-        return result;
-    }
-
-    bool ProcessCompletePacket(const std::vector<uint8_t>& data) {
-        Log("[te_sdk] ProcessCompletePacket called with %d bytes", data.size());
-
-        // The reassembled data is raw packet data, not a full RakNet packet
-        // We need to parse it directly as packet content
-        if (data.size() < 2) {
-            Log("[te_sdk] Reassembled packet too small (%d bytes)", data.size());
-            return true;
+        if (!data || length <= 0) {
+            return oHandleRpcPacket(rp, data, length, playerid);
         }
 
         try {
-            BitStream dataBitStream(const_cast<unsigned char*>(data.data()), data.size(), false);
+            RakNet::BitStream incoming{ const_cast<unsigned char*>(reinterpret_cast<const unsigned char*>(data)), static_cast<unsigned int>(length), true };
+            unsigned char id = 0;
+            unsigned char* input = nullptr;
+            unsigned int bits_data = 0;
+            std::shared_ptr<RakNet::BitStream> callback_bs{ std::make_shared<RakNet::BitStream>() };
 
-            BYTE packetId = 0;
-            if (!dataBitStream.Read(packetId)) {
-                Log("[te_sdk] Failed to read packetId from reassembled data");
-                return true;
+            incoming.IgnoreBits(8);
+            if (data[0] == PacketEnumeration::ID_TIMESTAMP) {
+                incoming.IgnoreBits(8 * (sizeof(RakNetTime) + sizeof(unsigned char)));
             }
 
-            if (packetId != 20) {
-                //Log("[te_sdk] Reassembled packet is not RPC (packetId: %d), allowing", packetId);
-                return true; // Allow non-RPC packets
+            int offset = incoming.GetReadOffset();
+            incoming.Read(id);
+
+            if (!incoming.ReadCompressed(bits_data)) {
+                return oHandleRpcPacket(rp, data, length, playerid);
             }
 
-            BYTE rpcId = 0;
-            if (!dataBitStream.Read(rpcId)) {
-                Log("[te_sdk] Failed to read rpcId from reassembled data");
-                return true;
-            }
+            if (bits_data) {
+#undef MAX_ALLOCA_STACK_ALLOCATION
+                bool used_alloca = false;
+                const size_t MAX_ALLOCA_STACK_ALLOCATION = 1024;
 
-            // Extract remaining payload
-            int unreadBits = dataBitStream.GetNumberOfUnreadBits();
-            int unreadBytes = unreadBits / 8;
-            std::vector<BYTE> payload;
+                if (BITS_TO_BYTES(incoming.GetNumberOfUnreadBits()) < MAX_ALLOCA_STACK_ALLOCATION) {
+                    input = static_cast<unsigned char*>(alloca(BITS_TO_BYTES(incoming.GetNumberOfUnreadBits())));
+                    used_alloca = true;
+                }
+                else {
+                    input = new unsigned char[BITS_TO_BYTES(incoming.GetNumberOfUnreadBits())];
+                }
 
-            if (unreadBytes > 0) {
-                payload.resize(unreadBytes);
-                if (!dataBitStream.Read(reinterpret_cast<char*>(payload.data()), unreadBytes)) {
-                    Log("[te_sdk] Failed to read payload from reassembled data");
-                    return true;
+                if (!incoming.ReadBits(input, bits_data, false)) {
+                    if (!used_alloca) {
+                        delete[] input;
+                    }
+                    return oHandleRpcPacket(rp, data, length, playerid);
+                }
+
+                callback_bs = std::make_shared<RakNet::BitStream>(input, BITS_TO_BYTES(bits_data), true);
+
+                if (!used_alloca) {
+                    delete[] input;
                 }
             }
 
-            Log("[te_sdk] Processing reassembled RPC %d (payload size: %d)", rpcId, payload.size());
-
-            // Create BitStream for callback
-            BitStream rpcData(payload.data(), payload.size(), false);
-            bool allowed = g_forwarder.IncomingRpc(rpcId, &rpcData, LocalClient->GetInterface());
-
-            //Log("[te_sdk] RPC %d callback result: %s", rpcId, allowed ? "ALLOWED" : "BLOCKED");
-
-            if (!allowed) {
-                return false; // Block packet
+            // Call our incoming RPC callbacks
+            if (!g_forwarder.IncomingRpc(id, callback_bs.get(), rp)) {
+                return false; // Block the RPC
             }
-            else {
-                return true; // Allow packet
+
+            // Reconstruct the data for the original function
+            incoming.SetWriteOffset(offset);
+            incoming.Write(id);
+            bits_data = BYTES_TO_BITS(callback_bs->GetNumberOfBytesUsed());
+            incoming.WriteCompressed(bits_data);
+            if (bits_data) {
+                incoming.WriteBits(callback_bs->GetData(), bits_data, false);
             }
-        }
-        catch (const std::exception& e) {
-            Log("[te_sdk] Exception while processing reassembled packet: %s", e.what());
-            return true; // Allow packet on exception
+
+            return oHandleRpcPacket(rp, reinterpret_cast<const char*>(incoming.GetData()), incoming.GetNumberOfBytesUsed(), playerid);
         }
         catch (...) {
-            Log("[te_sdk] Unknown exception while processing reassembled packet");
-            return true; // Allow packet on exception
+            Log("[te_sdk] Exception in hkHandleRpcPacket, allowing original call");
+            return oHandleRpcPacket(rp, data, length, playerid);
         }
     }
 
-    bool ProcessCompleteRPC(const helper::ExtractedRPC& rpc) {
-        if (rpc.packetId == 20) {
-            BitStream rpcData(const_cast<unsigned char*>(rpc.payload.data()), rpc.payload.size(), false);
-            bool allowed = g_forwarder.IncomingRpc(rpc.rpcId, &rpcData, LocalClient->GetInterface());
-
-            //Log("[te_sdk] Complete RPC %d callback result: %s", rpc.rpcId, allowed ? "ALLOWED" : "BLOCKED");
-
-            if (!allowed) {
-                return false; // Block packet
-            }
-            else {
-                return true; // Allow packet
-            }
+    bool AttachHandleRpcPacketHook() {
+        std::uintptr_t handleRpcPacketAddr = helper::GetHandleRpcPacketAddress();
+        if (!handleRpcPacketAddr) {
+            Log("[te_sdk] Failed to get handle_rpc_packet address for current SAMP version");
+            return false;
         }
-        return true; // Allow non-RPC packets
+
+        oHandleRpcPacket = reinterpret_cast<tHandleRpcPacket>(handleRpcPacketAddr);
+
+        LONG error = DetourTransactionBegin();
+        if (error != NO_ERROR) {
+            Log("[te_sdk] DetourTransactionBegin failed with error: %ld", error);
+            return false;
+        }
+
+        DetourUpdateThread(GetCurrentThread());
+        DetourAttach(&reinterpret_cast<PVOID&>(oHandleRpcPacket), &hkHandleRpcPacket);
+
+        error = DetourTransactionCommit();
+        if (error != NO_ERROR) {
+            Log("[te_sdk] DetourTransactionCommit failed with error: %ld", error);
+            DetourTransactionAbort();
+            return false;
+        }
+
+        Log("[te_sdk] handle_rpc_packet hook attached successfully at 0x%p", reinterpret_cast<void*>(handleRpcPacketAddr));
+        return true;
+    }
+
+    bool IsSupportedSAMPVersion(helper::SAMPVersion version) {
+        return version == helper::SAMPVersion::R1 ||      // 0.3.7-R1
+            version == helper::SAMPVersion::R3 ||      // 0.3.7-R3-1 (assuming R3 maps to R3-1)
+            version == helper::SAMPVersion::R4 ||      // 0.3.7-R4
+            version == helper::SAMPVersion::DL;        // 0.3DL-R1
     }
 
     bool InitRakNetHooks()
@@ -320,7 +222,7 @@ namespace te_sdk
         {
             Log("[te_sdk] RakNet hooks already initialized.");
             return false;
-		}
+        }
 
         SAMPVersion version = GetSAMPVersion();
         if (version == SAMPVersion::Unknown)
@@ -329,11 +231,18 @@ namespace te_sdk
             return false;
         }
 
-		auto sampInfo = GetSAMPInfo();
+        // Check if this version supports incoming RPC hooks
+        if (!IsSupportedSAMPVersion(version)) {
+            Log("[te_sdk] SAMP version %s does not support incoming RPC hooks. Only outgoing hooks will be available.",
+                TranslateSAMPVersion(version).c_str());
+        }
+
+        auto sampInfo = GetSAMPInfo();
         if (!sampInfo)
         {
+            Log("[te_sdk] Failed to get SAMP info");
             return false;
-		}
+        }
 
         Log("[te_sdk] Detected SAMP version: %s", TranslateSAMPVersion(version).c_str());
         Log("[te_sdk] SAMP info found at %p", sampInfo);
@@ -342,24 +251,33 @@ namespace te_sdk
         void* rak = GetRakNetInterface();
         if (!rak)
         {
-			Log("[te_sdk] RakNet interface is not available.");
+            Log("[te_sdk] RakNet interface is not available.");
             return false;
         }
 
-        if (AttachWSAHooks())
-        {
-            LocalClient = new TERakClient(*reinterpret_cast<void**>(rak));
-            auto* hooked = new HookedRakClientInterface();
-            hooked->SetForwarder(&g_forwarder);
+        LocalClient = new TERakClient(*reinterpret_cast<void**>(rak));
+        auto* hooked = new HookedRakClientInterface();
+        hooked->SetForwarder(&g_forwarder);
 
-            DWORD oldProtect;
-            VirtualProtect((void*)rak, sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
-            *reinterpret_cast<void**>(rak) = hooked;
-            VirtualProtect((void*)rak, sizeof(void*), oldProtect, &oldProtect);
+        DWORD oldProtect;
+        VirtualProtect((void*)rak, sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
+        *reinterpret_cast<void**>(rak) = hooked;
+        VirtualProtect((void*)rak, sizeof(void*), oldProtect, &oldProtect);
 
-            Log("[te_sdk] RakNet hooks initialized successfully.");
-            return true;
+        // Only attach incoming RPC hook for supported versions
+        bool incomingRpcSupported = false;
+        if (IsSupportedSAMPVersion(version)) {
+            if (AttachHandleRpcPacketHook()) {
+                incomingRpcSupported = true;
+                Log("[te_sdk] Incoming RPC hook initialized successfully.");
+            }
+            else {
+                Log("[te_sdk] Failed to initialize incoming RPC hook.");
+            }
         }
-        return false;
+
+        Log("[te_sdk] RakNet hooks initialized successfully. Incoming RPC support: %s",
+            incomingRpcSupported ? "YES" : "NO");
+        return true;
     }
 }

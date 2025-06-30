@@ -1,11 +1,17 @@
 #include "te-sdk.h"
 
-#include "Detours/detours_x86.h"
-#pragma comment(lib, "Detours/detours_x86.lib")
-
 namespace te_sdk::helper
 {
 	using namespace te_sdk::helper::logging;
+
+    enum class SAMPVersionIndex : int {
+        v037r1 = 0,  // 0.3.7-R1
+        v037r31 = 1, // 0.3.7-R3-1  
+        v037r4 = 2,  // 0.3.7-R4
+        v03dlr1 = 3  // 0.3DL-R1
+    };
+
+    constexpr std::uintptr_t handle_rpc_packet_offsets[] = { 0x372f0, 0x3a6a0, 0x3ad90, 0x3a8a0 };
 
     static uintptr_t GetModuleBase(const wchar_t* moduleName)
     {
@@ -110,6 +116,34 @@ namespace te_sdk::helper
         }
     }
 
+    SAMPVersionIndex GetSAMPVersionIndex() {
+        uintptr_t base = GetModuleBase(L"samp.dll");
+        if (!base) return static_cast<SAMPVersionIndex>(-1);
+
+        auto* ntheader = reinterpret_cast<IMAGE_NT_HEADERS*>(base + reinterpret_cast<IMAGE_DOS_HEADER*>(base)->e_lfanew);
+        std::uintptr_t ep = ntheader->OptionalHeader.AddressOfEntryPoint;
+
+        switch (ep) {
+        case 0x31DF13: return SAMPVersionIndex::v037r1;  // 0.3.7-R1
+        case 0xCC4D0:  return SAMPVersionIndex::v037r31; // 0.3.7-R3-1
+        case 0xCBCB0:  return SAMPVersionIndex::v037r4;  // 0.3.7-R4
+        case 0xFDB60:  return SAMPVersionIndex::v03dlr1; // 0.3DL-R1
+        default: return static_cast<SAMPVersionIndex>(-1);
+        }
+    }
+
+    std::uintptr_t GetHandleRpcPacketAddress() {
+        SAMPVersionIndex versionIndex = GetSAMPVersionIndex();
+        if (static_cast<int>(versionIndex) < 0 || static_cast<int>(versionIndex) >= 4) {
+            return 0;
+        }
+
+        uintptr_t base = GetModuleBase(L"samp.dll");
+        if (!base) return 0;
+
+        return base + handle_rpc_packet_offsets[static_cast<int>(versionIndex)];
+    }
+
     bool ExtractRPCData(const char* data, int len, ExtractedRPC& out) {
         if (!data || len <= 0)
             return false;
@@ -188,31 +222,6 @@ namespace te_sdk::helper
             }
         }
 
-        return true;
-    }
-
-    bool AttachWSAHooks()
-    {
-        HMODULE ws2_32 = GetModuleHandleW(L"ws2_32.dll");
-        if (!ws2_32) return false;
-
-        oWSARecvFrom = reinterpret_cast<tWSARecvFrom>(GetProcAddress(ws2_32, "WSARecvFrom"));
-
-        if (!oWSARecvFrom) return false;
-
-        LONG error = DetourTransactionBegin();
-        if (error != NO_ERROR) return false;
-
-        DetourUpdateThread(GetCurrentThread());
-        DetourAttach(&(PVOID&)oWSARecvFrom, &te_sdk::hkWSARecvFrom);
-
-        error = DetourTransactionCommit();
-        if (error != NO_ERROR) {
-            DetourTransactionAbort();
-            return false;
-        }
-
-        Log("[te_sdk] WSA hooks attached successfully");
         return true;
     }
 }

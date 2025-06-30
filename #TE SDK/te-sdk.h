@@ -29,28 +29,20 @@ namespace te_sdk
         void* rakPeer;
     };
 
-    struct PacketFragment {
-        std::map<uint32_t, std::vector<uint8_t>> fragments;
-        uint32_t expectedFragments = 0;
-        std::chrono::steady_clock::time_point timestamp;
-    };
-
     using RpcCallback = std::function<bool(const RpcContext&)>;
     using PacketCallback = std::function<bool(const PacketContext&)>;
-
-    using tWSARecvFrom = int (WINAPI*)(SOCKET, LPWSABUF, DWORD, LPDWORD, LPDWORD, struct sockaddr*, LPINT, LPWSAOVERLAPPED, LPWSAOVERLAPPED_COMPLETION_ROUTINE);
+    using tHandleRpcPacket = bool(__cdecl*)(void* rp, const char* data, int length, PlayerID playerid);
 
     void RegisterRaknetCallback(HookType type, RpcCallback callback);
     void RegisterRaknetCallback(HookType type, PacketCallback callback);
     bool InitRakNetHooks();
 
-    int WINAPI hkWSARecvFrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesRecvd, LPDWORD lpFlags, struct sockaddr* lpFrom, LPINT lpFromlen, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
-
-    bool ProcessCompletePacket(const std::vector<uint8_t>& data);
-    bool ProcessCompleteRPC(const helper::ExtractedRPC& rpc);
+    // RPC hook function
+    bool __cdecl hkHandleRpcPacket(void* rp, const char* data, int length, PlayerID playerid);
+    bool AttachHandleRpcPacketHook();
+    bool IsSupportedSAMPVersion(helper::SAMPVersion version);
 
     extern TERakClient* LocalClient;
-    extern tWSARecvFrom oWSARecvFrom;
 }
 
 namespace te_sdk::forwarder

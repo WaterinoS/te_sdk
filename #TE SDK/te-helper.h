@@ -45,11 +45,10 @@ namespace te_sdk::helper
     // Returns RakClientInterface pointer based on version
     void* GetRakNetInterface();
 
-	// Initialize WSA hooks
-    bool AttachWSAHooks();
-
     std::string TranslateSAMPVersion(SAMPVersion version);
 
 	// Extract RPC data from a given data buffer
     bool ExtractRPCData(const char* data, int len, ExtractedRPC& out);
+
+    std::uintptr_t GetHandleRpcPacketAddress();
 }
