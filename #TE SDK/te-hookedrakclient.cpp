@@ -46,7 +46,7 @@ bool HookedRakClientInterface::Send(const char* data, int length, PacketPriority
 
     if (data && length > 0 && forwarder)
     {
-        BitStream bs(reinterpret_cast<unsigned char*>(const_cast<char*>(data)), length, false);
+        BitStream bs((unsigned char*)data, length, false);
         uint8_t packetId = 0;
         bs.Read(packetId);
         bs.ResetReadPointer();
