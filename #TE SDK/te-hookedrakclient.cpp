@@ -49,6 +49,8 @@ bool HookedRakClientInterface::Send(const char* data, int length, PacketPriority
         BitStream bs(reinterpret_cast<unsigned char*>(const_cast<char*>(data)), length, false);
         uint8_t packetId = 0;
         bs.Read(packetId);
+        bs.ResetReadPointer();
+
         if (!forwarder->OutgoingPacket(packetId, &bs, this))
 			return false;
 
@@ -67,6 +69,8 @@ bool HookedRakClientInterface::Send(BitStream* bitStream, PacketPriority priorit
     {
         uint8_t packetId = 0;
         bitStream->Read(packetId);
+        bitStream->ResetReadPointer();
+
         if (!forwarder->OutgoingPacket(packetId, bitStream, this))
             return false;
 
@@ -105,9 +109,7 @@ DataPacket* HookedRakClientInterface::Receive(void)
             break;
 
         uint8_t packetId = p->data[0];
-
         BitStream bs(p->data, p->length, false);
-        bs.Read(packetId);
 
         if (forwarder && forwarder->IncomingPacket(packetId, &bs, this))
             break;
