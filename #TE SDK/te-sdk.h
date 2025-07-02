@@ -17,14 +17,14 @@ namespace te_sdk
 {
     struct RpcContext
     {
-        uint8_t rpcId;
+        uint32_t rpcId;
         void* bitStream;
         void* rakPeer;
     };
 
     struct PacketContext
     {
-        uint8_t packetId;
+        uint32_t packetId;
         void* bitStream;
         void* rakPeer;
     };
@@ -43,6 +43,9 @@ namespace te_sdk
     bool IsSupportedSAMPVersion(helper::SAMPVersion version);
 
     extern TERakClient* LocalClient;
+
+    static_assert(sizeof(PacketContext) == 12, "PacketContext must be 12 bytes on 32-bit");
+    static_assert(sizeof(RpcContext) == 12, "RpcContext must be 12 bytes on 32-bit");
 }
 
 namespace te_sdk::forwarder
