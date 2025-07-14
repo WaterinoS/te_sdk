@@ -8,10 +8,11 @@ namespace te_sdk::helper
         v037r1 = 0,  // 0.3.7-R1
         v037r31 = 1, // 0.3.7-R3-1  
         v037r4 = 2,  // 0.3.7-R4
-        v03dlr1 = 3  // 0.3DL-R1
+        v03dlr1 = 3,  // 0.3DL-R1
+        v037r5 = 4  // 0.3-7-R5
     };
 
-    constexpr std::uintptr_t handle_rpc_packet_offsets[] = { 0x372f0, 0x3a6a0, 0x3ad90, 0x3a8a0 };
+    constexpr std::uintptr_t handle_rpc_packet_offsets[] = { 0x372f0, 0x3a6a0, 0x3ad90, 0x3a8a0, 0x3ADE0 };
 
     static uintptr_t GetModuleBase(const wchar_t* moduleName)
     {
@@ -117,24 +118,21 @@ namespace te_sdk::helper
     }
 
     SAMPVersionIndex GetSAMPVersionIndex() {
-        uintptr_t base = GetModuleBase(L"samp.dll");
-        if (!base) return static_cast<SAMPVersionIndex>(-1);
+		SAMPVersion ver = GetSAMPVersion();
 
-        auto* ntheader = reinterpret_cast<IMAGE_NT_HEADERS*>(base + reinterpret_cast<IMAGE_DOS_HEADER*>(base)->e_lfanew);
-        std::uintptr_t ep = ntheader->OptionalHeader.AddressOfEntryPoint;
-
-        switch (ep) {
-        case 0x31DF13: return SAMPVersionIndex::v037r1;  // 0.3.7-R1
-        case 0xCC4D0:  return SAMPVersionIndex::v037r31; // 0.3.7-R3-1
-        case 0xCBCB0:  return SAMPVersionIndex::v037r4;  // 0.3.7-R4
-        case 0xFDB60:  return SAMPVersionIndex::v03dlr1; // 0.3DL-R1
+        switch (ver) {
+        case SAMPVersion::R1: return SAMPVersionIndex::v037r1;  // 0.3.7-R1
+        case SAMPVersion::R3:  return SAMPVersionIndex::v037r31; // 0.3.7-R3-1
+        case SAMPVersion::R4:  return SAMPVersionIndex::v037r4;  // 0.3.7-R4
+        case SAMPVersion::DL:  return SAMPVersionIndex::v03dlr1; // 0.3DL-R1
+        case SAMPVersion::R5:  return SAMPVersionIndex::v037r5; // 0.3DL-R1
         default: return static_cast<SAMPVersionIndex>(-1);
         }
     }
 
     std::uintptr_t GetHandleRpcPacketAddress() {
         SAMPVersionIndex versionIndex = GetSAMPVersionIndex();
-        if (static_cast<int>(versionIndex) < 0 || static_cast<int>(versionIndex) >= 4) {
+        if (static_cast<int>(versionIndex) < 0 || static_cast<int>(versionIndex) >= 5) {
             return 0;
         }
 

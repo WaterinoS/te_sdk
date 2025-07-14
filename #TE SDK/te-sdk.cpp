@@ -271,6 +271,7 @@ namespace te_sdk
         return version == helper::SAMPVersion::R1 ||      // 0.3.7-R1
             version == helper::SAMPVersion::R3 ||      // 0.3.7-R3-1 (assuming R3 maps to R3-1)
             version == helper::SAMPVersion::R4 ||      // 0.3.7-R4
+            version == helper::SAMPVersion::R5 ||      // 0.3.7-R5
             version == helper::SAMPVersion::DL;        // 0.3DL-R1
     }
 
