@@ -33,6 +33,7 @@
     <ClInclude Include="te-inc.h" />
     <ClInclude Include="te-logger.h" />
     <ClInclude Include="te-rakclient.h" />
+    <ClInclude Include="te-samp.h" />
     <ClInclude Include="te-sdk.h" />
   </ItemGroup>
   <ItemGroup>
@@ -44,6 +45,7 @@
     <ClCompile Include="te-hookedrakclient.cpp" />
     <ClCompile Include="te-logger.cpp" />
     <ClCompile Include="te-rakclient.cpp" />
+    <ClCompile Include="te-samp.cpp" />
     <ClCompile Include="te-sdk.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

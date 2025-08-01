@@ -2,6 +2,7 @@
 
 #include "te-inc.h"
 #include "te-helper.h"
+#include "te-samp.h"
 #include "te-logger.h"
 #include "te-rakclient.h"
 

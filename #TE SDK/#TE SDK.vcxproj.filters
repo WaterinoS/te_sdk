@@ -57,6 +57,9 @@
     <ClInclude Include="FullRakNet\GetTime.h">
       <Filter>components</Filter>
     </ClInclude>
+    <ClInclude Include="te-samp.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FullRakNet\BitStream.cpp">
@@ -85,6 +88,9 @@
     </ClCompile>
     <ClCompile Include="FullRakNet\GetTime.cpp">
       <Filter>components</Filter>
+    </ClCompile>
+    <ClCompile Include="te-samp.cpp">
+      <Filter>src</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
