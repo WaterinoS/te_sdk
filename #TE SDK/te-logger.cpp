@@ -18,8 +18,8 @@ namespace te::sdk::helper::logging
 
     void Log(const char* fmt, ...)
     {
-        const char* folder = "te::sdk";
-        const char* filepath = "te::sdk/te::sdk.log";
+        const char* folder = "te_sdk";
+        const char* filepath = "te_sdk/te_sdk.log";
 
         std::filesystem::create_directory(folder);
 
