@@ -10,10 +10,7 @@ bool HookedRakClientInterface::Connect(const char* host, unsigned short serverPo
 {
     te::sdk::helper::logging::Log("[te::sdk] Connecting to %s:%d", host, serverPort);
 
-    if (host) {
-        strncpy_s(te::sdk::sessionInfo.serverIP, sizeof(te::sdk::sessionInfo.serverIP), host, _TRUNCATE);
-    }
-
+	strcpy_s(te::sdk::sessionInfo.serverIP, host);
     te::sdk::sessionInfo.serverPort = serverPort;
     te::sdk::sessionInfo.clientPort = clientPort;
     te::sdk::sessionInfo.depreciated = depreciated;
