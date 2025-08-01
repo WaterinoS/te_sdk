@@ -105,7 +105,7 @@ namespace te::sdk
     PlayerID g_playerId = { 0, 0 };
 
     // Initialize sessionInfo with default values
-    SessionInfo sessionInfo = {
+    static SessionInfo sessionInfo = {
         "",      // serverIP
         0,       // serverPort
         0,       // clientPort
@@ -328,13 +328,13 @@ namespace te::sdk
             return false;
         }
 
-        LocalClient = new TERakClient(*reinterpret_cast<void**>(rak));
+        LocalClient = new TERakClient(*static_cast<void**>(rak));
         auto* hooked = new HookedRakClientInterface();
         hooked->SetForwarder(&g_forwarder);
 
         DWORD oldProtect;
         VirtualProtect((void*)rak, sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect);
-        *reinterpret_cast<void**>(rak) = hooked;
+        *static_cast<void**>(rak) = hooked;
         VirtualProtect((void*)rak, sizeof(void*), oldProtect, &oldProtect);
 
         // Only attach incoming RPC hook for supported versions
