@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace te_sdk::helper::logging
+namespace te::sdk::helper::logging
 {
     static bool sessionReset = true; // Flag to track if this is a new session
 
@@ -18,8 +18,8 @@ namespace te_sdk::helper::logging
 
     void Log(const char* fmt, ...)
     {
-        const char* folder = "te_sdk";
-        const char* filepath = "te_sdk/te_sdk.log";
+        const char* folder = "te::sdk";
+        const char* filepath = "te::sdk/te::sdk.log";
 
         std::filesystem::create_directory(folder);
 

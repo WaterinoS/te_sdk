@@ -6,7 +6,7 @@
 
 using namespace RakNet;
 
-namespace te_sdk::detail {
+namespace te::sdk::detail {
     struct HookForwarder;
 }
 
@@ -131,8 +131,8 @@ public:
 
     virtual PlayerIndex GetPlayerIndex(void);
 
-    void SetForwarder(te_sdk::forwarder::HookForwarder* fwd);
+    void SetForwarder(te::sdk::forwarder::HookForwarder* fwd);
 
     private:
-        te_sdk::forwarder::HookForwarder* forwarder = nullptr;
+        te::sdk::forwarder::HookForwarder* forwarder = nullptr;
 };

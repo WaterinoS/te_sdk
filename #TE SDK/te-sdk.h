@@ -13,7 +13,7 @@ enum class HookType
     IncomingPacket
 };
 
-namespace te_sdk
+namespace te::sdk
 {
     struct RpcContext
     {
@@ -27,6 +27,16 @@ namespace te_sdk
         uint32_t packetId;
         void* bitStream;
         void* rakPeer;
+    };
+
+    struct SessionInfo
+    {
+        char serverIP[64];           // Server IP address
+        unsigned short serverPort;   // Server port
+        unsigned short clientPort;   // Client port used for connection
+        bool isConnected;            // Connection status
+        unsigned int depreciated;    // Depreciated parameter from Connect call
+        int threadSleepTimer;        // Thread sleep timer from Connect call
     };
 
     using RpcCallback = std::function<bool(const RpcContext&)>;
@@ -43,12 +53,13 @@ namespace te_sdk
     bool IsSupportedSAMPVersion(helper::SAMPVersion version);
 
     extern TERakClient* LocalClient;
+    extern SessionInfo sessionInfo;  // Global session information
 
     static_assert(sizeof(PacketContext) == 12, "PacketContext must be 12 bytes on 32-bit");
     static_assert(sizeof(RpcContext) == 12, "RpcContext must be 12 bytes on 32-bit");
 }
 
-namespace te_sdk::forwarder
+namespace te::sdk::forwarder
 {
     bool ForwardOutgoingRpc(uint8_t rpcId, void* bitStream, void* rakPeer);
     bool ForwardIncomingRpc(uint8_t rpcId, void* bitStream, void* rakPeer);

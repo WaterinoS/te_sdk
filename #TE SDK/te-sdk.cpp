@@ -8,18 +8,18 @@
 #include "Detours/detours_x86.h"
 #pragma comment(lib, "Detours/detours_x86.lib")
 
-namespace te_sdk::forwarder
+namespace te::sdk::forwarder
 {
     std::recursive_mutex g_mutex;
 
-    std::vector<te_sdk::RpcCallback> g_outgoingRpcCallbacks;
-    std::vector<te_sdk::RpcCallback> g_incomingRpcCallbacks;
-    std::vector<te_sdk::PacketCallback> g_outgoingPacketCallbacks;
-    std::vector<te_sdk::PacketCallback> g_incomingPacketCallbacks;
+    std::vector<te::sdk::RpcCallback> g_outgoingRpcCallbacks;
+    std::vector<te::sdk::RpcCallback> g_incomingRpcCallbacks;
+    std::vector<te::sdk::PacketCallback> g_outgoingPacketCallbacks;
+    std::vector<te::sdk::PacketCallback> g_incomingPacketCallbacks;
 
     bool OnOutgoingRpc(uint8_t rpcId, void* bitStream, void* rakPeer)
     {
-        te_sdk::RpcContext ctx{ rpcId, bitStream, rakPeer };
+        te::sdk::RpcContext ctx{ rpcId, bitStream, rakPeer };
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
 
         // If no callbacks are registered, allow the RPC to proceed
@@ -36,7 +36,7 @@ namespace te_sdk::forwarder
 
     bool OnIncomingRpc(uint8_t rpcId, void* bitStream, void* rakPeer)
     {
-        te_sdk::RpcContext ctx{ rpcId, bitStream, rakPeer };
+        te::sdk::RpcContext ctx{ rpcId, bitStream, rakPeer };
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
 
         // If no callbacks are registered, allow the RPC to proceed
@@ -53,7 +53,7 @@ namespace te_sdk::forwarder
 
     bool OnOutgoingPacket(uint8_t packetId, void* bitStream, void* rakPeer)
     {
-        te_sdk::PacketContext ctx{ packetId, bitStream, rakPeer };
+        te::sdk::PacketContext ctx{ packetId, bitStream, rakPeer };
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
 
         // If no callbacks are registered, allow the packet to proceed
@@ -70,7 +70,7 @@ namespace te_sdk::forwarder
 
     bool OnIncomingPacket(uint8_t packetId, void* bitStream, void* rakPeer)
     {
-        te_sdk::PacketContext ctx{ packetId, bitStream, rakPeer };
+        te::sdk::PacketContext ctx{ packetId, bitStream, rakPeer };
         std::lock_guard<std::recursive_mutex> lock(g_mutex);
 
         // If no callbacks are registered, allow the packet to proceed
@@ -93,16 +93,26 @@ namespace te_sdk::forwarder
     HookForwarder g_forwarder;
 }
 
-namespace te_sdk
+namespace te::sdk
 {
-    using namespace te_sdk::forwarder;
-    using namespace te_sdk::helper::logging;
+    using namespace te::sdk::forwarder;
+    using namespace te::sdk::helper::logging;
 
     TERakClient* LocalClient = nullptr;
     tHandleRpcPacket oHandleRpcPacket = nullptr;
 
     void* g_rakPeer = nullptr;
     PlayerID g_playerId = { 0, 0 };
+
+    // Initialize sessionInfo with default values
+    SessionInfo sessionInfo = {
+        "",      // serverIP
+        0,       // serverPort
+        0,       // clientPort
+        false,   // isConnected
+        0,       // depreciated
+        0        // threadSleepTimer
+    };
 
     void RegisterRaknetCallback(HookType type, RpcCallback callback)
     {
@@ -162,13 +172,13 @@ namespace te_sdk
 
             // Read RPC ID
             if (!incoming.Read(id)) {
-                Log("[te_sdk] Failed to read RPC ID");
+                Log("[te::sdk] Failed to read RPC ID");
                 return oHandleRpcPacket(rp, data, length, playerid);
             }
 
             // Read compressed data size
             if (!incoming.ReadCompressed(bits_data)) {
-                Log("[te_sdk] Failed to read compressed data size");
+                Log("[te::sdk] Failed to read compressed data size");
                 return oHandleRpcPacket(rp, data, length, playerid);
             }
 
@@ -185,7 +195,7 @@ namespace te_sdk
 
                 // Read the RPC data
                 if (!incoming.ReadBits(input, bits_data, false)) {
-                    Log("[te_sdk] Failed to read RPC data bits");
+                    Log("[te::sdk] Failed to read RPC data bits");
                     if (bytes_needed >= MAX_ALLOCA_STACK_ALLOCATION) {
                         delete[] input;
                     }
@@ -206,12 +216,12 @@ namespace te_sdk
                 allow_rpc = g_forwarder.IncomingRpc(id, callback_bs.get(), rp);
             }
             catch (...) {
-                Log("[te_sdk] Exception in RPC callback for RPC ID %d", id);
+                Log("[te::sdk] Exception in RPC callback for RPC ID %d", id);
                 allow_rpc = true;
             }
 
             if (!allow_rpc) {
-                Log("[te_sdk] RPC ID %d blocked by callback", id);
+                Log("[te::sdk] RPC ID %d blocked by callback", id);
                 return false;
             }
 
@@ -229,11 +239,11 @@ namespace te_sdk
 
         }
         catch (const std::exception& e) {
-            Log("[te_sdk] Exception in hkHandleRpcPacket: %s", e.what());
+            Log("[te::sdk] Exception in hkHandleRpcPacket: %s", e.what());
             return oHandleRpcPacket(rp, data, length, playerid);
         }
         catch (...) {
-            Log("[te_sdk] Unknown exception in hkHandleRpcPacket");
+            Log("[te::sdk] Unknown exception in hkHandleRpcPacket");
             return oHandleRpcPacket(rp, data, length, playerid);
         }
     }
@@ -241,7 +251,7 @@ namespace te_sdk
     bool AttachHandleRpcPacketHook() {
         std::uintptr_t handleRpcPacketAddr = helper::GetHandleRpcPacketAddress();
         if (!handleRpcPacketAddr) {
-            Log("[te_sdk] Failed to get handle_rpc_packet address for current SAMP version");
+            Log("[te::sdk] Failed to get handle_rpc_packet address for current SAMP version");
             return false;
         }
 
@@ -249,7 +259,7 @@ namespace te_sdk
 
         LONG error = DetourTransactionBegin();
         if (error != NO_ERROR) {
-            Log("[te_sdk] DetourTransactionBegin failed with error: %ld", error);
+            Log("[te::sdk] DetourTransactionBegin failed with error: %ld", error);
             return false;
         }
 
@@ -258,12 +268,12 @@ namespace te_sdk
 
         error = DetourTransactionCommit();
         if (error != NO_ERROR) {
-            Log("[te_sdk] DetourTransactionCommit failed with error: %ld", error);
+            Log("[te::sdk] DetourTransactionCommit failed with error: %ld", error);
             DetourTransactionAbort();
             return false;
         }
 
-        Log("[te_sdk] handle_rpc_packet hook attached successfully at 0x%p", reinterpret_cast<void*>(handleRpcPacketAddr));
+        Log("[te::sdk] handle_rpc_packet hook attached successfully at 0x%p", reinterpret_cast<void*>(handleRpcPacketAddr));
         return true;
     }
 
@@ -277,44 +287,44 @@ namespace te_sdk
 
     bool InitRakNetHooks()
     {
-        using namespace te_sdk::helper;
+        using namespace te::sdk::helper;
 
-        te_sdk::helper::logging::ResetSession();
+        te::sdk::helper::logging::ResetSession();
 
         if (LocalClient)
         {
-            Log("[te_sdk] RakNet hooks already initialized.");
+            Log("[te::sdk] RakNet hooks already initialized.");
             return false;
         }
 
         SAMPVersion version = GetSAMPVersion();
         if (version == SAMPVersion::Unknown)
         {
-            Log("[te_sdk] Unsupported SAMP version. Hooking aborted.");
+            Log("[te::sdk] Unsupported SAMP version. Hooking aborted.");
             return false;
         }
 
         // Check if this version supports incoming RPC hooks
         if (!IsSupportedSAMPVersion(version)) {
-            Log("[te_sdk] SAMP version %s does not support incoming RPC hooks. Only outgoing hooks will be available.",
+            Log("[te::sdk] SAMP version %s does not support incoming RPC hooks. Only outgoing hooks will be available.",
                 TranslateSAMPVersion(version).c_str());
         }
 
         auto sampInfo = GetSAMPInfo();
         if (!sampInfo)
         {
-            Log("[te_sdk] Failed to get SAMP info");
+            Log("[te::sdk] Failed to get SAMP info");
             return false;
         }
 
-        Log("[te_sdk] Detected SAMP version: %s", TranslateSAMPVersion(version).c_str());
-        Log("[te_sdk] SAMP info found at %p", sampInfo);
+        Log("[te::sdk] Detected SAMP version: %s", TranslateSAMPVersion(version).c_str());
+        Log("[te::sdk] SAMP info found at %p", sampInfo);
 
-        Log("[te_sdk] Initializing RakNet hooks...");
+        Log("[te::sdk] Initializing RakNet hooks...");
         void* rak = GetRakNetInterface();
         if (!rak)
         {
-            Log("[te_sdk] RakNet interface is not available.");
+            Log("[te::sdk] RakNet interface is not available.");
             return false;
         }
 
@@ -332,14 +342,14 @@ namespace te_sdk
         if (IsSupportedSAMPVersion(version)) {
             if (AttachHandleRpcPacketHook()) {
                 incomingRpcSupported = true;
-                Log("[te_sdk] Incoming RPC hook initialized successfully.");
+                Log("[te::sdk] Incoming RPC hook initialized successfully.");
             }
             else {
-                Log("[te_sdk] Failed to initialize incoming RPC hook.");
+                Log("[te::sdk] Failed to initialize incoming RPC hook.");
             }
         }
 
-        Log("[te_sdk] RakNet hooks initialized successfully. Incoming RPC support: %s",
+        Log("[te::sdk] RakNet hooks initialized successfully. Incoming RPC support: %s",
             incomingRpcSupported ? "YES" : "NO");
         return true;
     }

@@ -3,19 +3,37 @@
 #include "FullRakNet/PacketEnumerations.h"
 
 using namespace RakNet;
-using namespace te_sdk;
+using namespace te::sdk;
 
 bool HookedRakClientInterface::Connect(const char* host, unsigned short serverPort, unsigned short clientPort,
     unsigned int depreciated, int threadSleepTimer)
 {
-    te_sdk::helper::logging::Log("[te_sdk] Connecting to %s:%d", host, serverPort);
+    te::sdk::helper::logging::Log("[te::sdk] Connecting to %s:%d", host, serverPort);
 
-    return LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->Connect(host, serverPort, clientPort, depreciated, threadSleepTimer) : false;
+    if (host) {
+        strncpy_s(te::sdk::sessionInfo.serverIP, sizeof(te::sdk::sessionInfo.serverIP), host, _TRUNCATE);
+    }
+
+    te::sdk::sessionInfo.serverPort = serverPort;
+    te::sdk::sessionInfo.clientPort = clientPort;
+    te::sdk::sessionInfo.depreciated = depreciated;
+    te::sdk::sessionInfo.threadSleepTimer = threadSleepTimer;
+    te::sdk::sessionInfo.isConnected = false; // Will be set to true on successful connection
+
+    bool result = LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->Connect(host, serverPort, clientPort, depreciated, threadSleepTimer) : false;
+    
+    if (result) {
+        te::sdk::sessionInfo.isConnected = true;
+    }
+
+    return result;
 }
 
 void HookedRakClientInterface::Disconnect(unsigned int blockDuration, unsigned char orderingChannel)
 {
-    te_sdk::helper::logging::Log("[te_sdk] Disconnecting from server");
+    te::sdk::helper::logging::Log("[te::sdk] Disconnecting from server");
+
+    te::sdk::sessionInfo.isConnected = false;
 
     if (LocalClient && LocalClient->GetInterface())
         LocalClient->GetInterface()->Disconnect(blockDuration, orderingChannel);
@@ -40,7 +58,7 @@ bool HookedRakClientInterface::HasPassword(void) const
 
 bool HookedRakClientInterface::Send(const char* data, int length, PacketPriority priority, PacketReliability reliability, char orderingChannel)
 {
-	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::Send called");
+	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::Send called");
 
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
@@ -62,7 +80,7 @@ bool HookedRakClientInterface::Send(const char* data, int length, PacketPriority
 
 bool HookedRakClientInterface::Send(BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel)
 {
-	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::Send called");
+	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::Send called");
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (bitStream && forwarder)
@@ -211,7 +229,7 @@ void HookedRakClientInterface::UnregisterAsRemoteProcedureCall(int* uniqueID)
 
 bool HookedRakClientInterface::RPC(int* uniqueID, const char* data, unsigned int bitLength, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp)
 {
-	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::RPC called");
+	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::RPC called");
 
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
@@ -229,7 +247,7 @@ bool HookedRakClientInterface::RPC(int* uniqueID, const char* data, unsigned int
 
 bool HookedRakClientInterface::RPC(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp)
 {
-	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::RPC called");
+	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::RPC called");
 
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
@@ -246,7 +264,7 @@ bool HookedRakClientInterface::RPC(int* uniqueID, BitStream* bitStream, PacketPr
 
 bool HookedRakClientInterface::RPC_(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp, NetworkID networkID)
 {
-	//te_sdk::helper::Log("[te_sdk] HookedRakClientInterface::RPC_ called");
+	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::RPC_ called");
 
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
@@ -409,7 +427,7 @@ PlayerIndex HookedRakClientInterface::GetPlayerIndex(void)
     return LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->GetPlayerIndex() : 0;
 }
 
-void HookedRakClientInterface::SetForwarder(te_sdk::forwarder::HookForwarder* fwd)
+void HookedRakClientInterface::SetForwarder(te::sdk::forwarder::HookForwarder* fwd)
 {
     forwarder = fwd;
 }

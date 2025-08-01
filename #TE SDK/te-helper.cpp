@@ -1,8 +1,8 @@
 #include "te-sdk.h"
 
-namespace te_sdk::helper
+namespace te::sdk::helper
 {
-	using namespace te_sdk::helper::logging;
+	using namespace te::sdk::helper::logging;
 
     enum class SAMPVersionIndex : int {
         v037r1 = 0,  // 0.3.7-R1
