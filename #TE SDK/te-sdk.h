@@ -54,7 +54,7 @@ namespace te::sdk
     bool IsSupportedSAMPVersion(helper::SAMPVersion version);
 
     extern TERakClient* LocalClient;
-    extern SessionInfo sessionInfo;  // Global session information
+    SessionInfo& GetSessionInfo();
 
     static_assert(sizeof(PacketContext) == 12, "PacketContext must be 12 bytes on 32-bit");
     static_assert(sizeof(RpcContext) == 12, "RpcContext must be 12 bytes on 32-bit");

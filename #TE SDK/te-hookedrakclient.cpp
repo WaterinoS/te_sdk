@@ -10,17 +10,19 @@ bool HookedRakClientInterface::Connect(const char* host, unsigned short serverPo
 {
     te::sdk::helper::logging::Log("[te::sdk] Connecting to %s:%d", host, serverPort);
 
-    strcpy_s(te::sdk::sessionInfo.serverIP, host);
-    te::sdk::sessionInfo.serverPort = serverPort;
-    te::sdk::sessionInfo.clientPort = clientPort;
-    te::sdk::sessionInfo.depreciated = depreciated;
-    te::sdk::sessionInfo.threadSleepTimer = threadSleepTimer;
-    te::sdk::sessionInfo.isConnected = false; // Will be set to true on successful connection
+    auto& session = te::sdk::GetSessionInfo();
+
+    strcpy_s(session.serverIP, host);
+    session.serverPort = serverPort;
+    session.clientPort = clientPort;
+    session.depreciated = depreciated;
+    session.threadSleepTimer = threadSleepTimer;
+    session.isConnected = false;
 
     bool result = LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->Connect(host, serverPort, clientPort, depreciated, threadSleepTimer) : false;
     
     if (result) {
-        te::sdk::sessionInfo.isConnected = true;
+        session.isConnected = true;
     }
 
     return result;
@@ -30,7 +32,7 @@ void HookedRakClientInterface::Disconnect(unsigned int blockDuration, unsigned c
 {
     te::sdk::helper::logging::Log("[te::sdk] Disconnecting from server");
 
-    te::sdk::sessionInfo.isConnected = false;
+    te::sdk::GetSessionInfo().isConnected = false;
 
     if (LocalClient && LocalClient->GetInterface())
         LocalClient->GetInterface()->Disconnect(blockDuration, orderingChannel);

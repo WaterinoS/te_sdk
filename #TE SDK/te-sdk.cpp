@@ -104,15 +104,18 @@ namespace te::sdk
     void* g_rakPeer = nullptr;
     PlayerID g_playerId = { 0, 0 };
 
-    // Initialize sessionInfo with default values
     static SessionInfo sessionInfo = {
-        "",      // serverIP
-        0,       // serverPort
-        0,       // clientPort
-        false,   // isConnected
-        0,       // depreciated
-        0        // threadSleepTimer
+       "",      // serverIP
+       0,       // serverPort
+       0,       // clientPort
+       false,   // isConnected
+       0,       // depreciated
+       0        // threadSleepTimer
     };
+
+    SessionInfo& GetSessionInfo() {
+        return sessionInfo;
+    }
 
     void RegisterRaknetCallback(HookType type, RpcCallback callback)
     {
