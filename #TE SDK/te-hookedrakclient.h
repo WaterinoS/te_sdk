@@ -32,9 +32,9 @@ public:
     virtual bool Send(BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
         char orderingChannel);
 
-    virtual DataPacket* Receive(void);
+    virtual Packet* Receive(void);
 
-    virtual void DeallocatePacket(DataPacket* packet);
+    virtual void DeallocatePacket(Packet* packet);
 
     virtual void PingServer(void);
 
@@ -106,7 +106,7 @@ public:
 
     virtual const char* PlayerIDToDottedIP(PlayerID playerId) const;
 
-    virtual void PushBackPacket(DataPacket* packet, bool pushAtHead);
+    virtual void PushBackPacket(Packet* packet, bool pushAtHead);
 
     virtual void SetRouterInterface(void* routerInterface);
 
