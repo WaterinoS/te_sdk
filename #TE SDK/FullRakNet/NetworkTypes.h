@@ -152,7 +152,6 @@ const NetworkID UNASSIGNED_NETWORK_ID =
 
 const int PING_TIMES_ARRAY_SIZE = 5;
 
-#pragma pack(push, 1)
 struct Packet
 {
 	PlayerIndex playerIndex;
@@ -162,7 +161,16 @@ struct Packet
 	unsigned char* data;
 	bool deleteData;
 };
-#pragma pack(pop)
+
+struct DataPacket
+{
+	PlayerID playerId;
+	unsigned int length;
+	unsigned int bitSize;
+	unsigned char* data;
+	bool deleteData;
+	PlayerIndex playerIndex;
+};
 
 /// \brief RPC Function Implementation
 ///
