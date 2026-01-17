@@ -113,13 +113,13 @@ bool IsValidPtr(void* ptr, size_t size = 4)
     return false;
 }
 
-DataPacket* HookedRakClientInterface::Receive(void)
+Packet* HookedRakClientInterface::Receive(void)
 {
-    DataPacket* p = LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->Receive() : nullptr;
+    Packet* p = LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->Receive() : nullptr;
 
     while (p != nullptr)
     {
-        if (!IsValidPtr(p, sizeof(DataPacket)))
+        if (!IsValidPtr(p, sizeof(Packet)))
             break;
 
         if (!p->data || !IsValidPtr(p->data, p->length) || p->length == 0)
@@ -138,7 +138,7 @@ DataPacket* HookedRakClientInterface::Receive(void)
     return p;
 }
 
-void HookedRakClientInterface::DeallocatePacket(DataPacket* packet)
+void HookedRakClientInterface::DeallocatePacket(Packet* packet)
 {
     if (LocalClient && LocalClient->GetInterface())
         LocalClient->GetInterface()->DeallocatePacket(packet);
@@ -359,7 +359,7 @@ const char* HookedRakClientInterface::PlayerIDToDottedIP(PlayerID playerId) cons
     return LocalClient && LocalClient->GetInterface() ? LocalClient->GetInterface()->PlayerIDToDottedIP(playerId) : "";
 }
 
-void HookedRakClientInterface::PushBackPacket(DataPacket* packet, bool pushAtHead)
+void HookedRakClientInterface::PushBackPacket(Packet* packet, bool pushAtHead)
 {
     if (LocalClient && LocalClient->GetInterface())
         LocalClient->GetInterface()->PushBackPacket(packet, pushAtHead);
