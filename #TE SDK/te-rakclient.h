@@ -94,6 +94,30 @@ public:
     bool SendPacket(BitStream* bitStream, PacketPriority priority,
         PacketReliability reliability, char orderingChannel);
 
+    bool SendRPC(int rpcId, BitStream* bitStream)
+    {
+        return SendRPC(rpcId, bitStream, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false);
+    }
+
+    bool SendRPC(int rpcId, BitStream* bitStream, PacketPriority priority, PacketReliability reliability)
+    {
+        return SendRPC(rpcId, bitStream, priority, reliability, 0, false);
+    }
+
+    bool SendRPC(int rpcId, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel)
+    {
+        return SendRPC(rpcId, bitStream, priority, reliability, orderingChannel, false);
+    }
+
+    bool SendPacket(BitStream* bitStream)
+    {
+        return SendPacket(bitStream, HIGH_PRIORITY, RELIABLE_ORDERED, 0);
+    }
+
+    bool SendPacket(BitStream* bitStream, PacketPriority priority, PacketReliability reliability)
+    {
+        return SendPacket(bitStream, priority, reliability, 0);
+    }
 private:
     void* raw;
     void** originalVtable;
