@@ -51,9 +51,6 @@
     <ClInclude Include="FullRakNet\PacketEnumerations.h">
       <Filter>components</Filter>
     </ClInclude>
-    <ClInclude Include="te-hookedrakclient.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="FullRakNet\GetTime.h">
       <Filter>components</Filter>
     </ClInclude>
@@ -81,9 +78,6 @@
       <Filter>components</Filter>
     </ClCompile>
     <ClCompile Include="te-rakclient.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
-    <ClCompile Include="te-hookedrakclient.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="FullRakNet\GetTime.cpp">

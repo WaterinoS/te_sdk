@@ -29,7 +29,6 @@
     <ClInclude Include="FullRakNet\RakNetDefines.h" />
     <ClInclude Include="FullRakNet\RakNetStatistics.h" />
     <ClInclude Include="te-helper.h" />
-    <ClInclude Include="te-hookedrakclient.h" />
     <ClInclude Include="te-inc.h" />
     <ClInclude Include="te-logger.h" />
     <ClInclude Include="te-rakclient.h" />
@@ -42,7 +41,6 @@
     <ClCompile Include="FullRakNet\NetworkTypes.cpp" />
     <ClCompile Include="FullRakNet\RakNetStatistics.cpp" />
     <ClCompile Include="te-helper.cpp" />
-    <ClCompile Include="te-hookedrakclient.cpp" />
     <ClCompile Include="te-logger.cpp" />
     <ClCompile Include="te-rakclient.cpp" />
     <ClCompile Include="te-samp.cpp" />
@@ -107,6 +105,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>../lib/</OutDir>
     <TargetName>te_sdk_rel</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <VcpkgInstalledDir>..\..\..\..\..\..\..\vcpkg\vcpkg\installed</VcpkgInstalledDir>
+    <VcpkgUseStatic>true</VcpkgUseStatic>
+    <VcpkgUseMD>true</VcpkgUseMD>
+    <VcpkgTriplet>x86-windows</VcpkgTriplet>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

@@ -1,25 +1,41 @@
-#include "te-rakclient.h"
+#include "te-sdk.h"
 
-TERakClient::TERakClient(void* pRakClientInterface)
+TERakClient::TERakClient(void* rawInterface, void** originalVtable)
 {
-    pRakClient = reinterpret_cast<local_RakClientInterface*>(pRakClientInterface);
+    this->raw = rawInterface;
+    this->originalVtable = originalVtable;
 }
 
 bool TERakClient::SendRPC(int rpcId, BitStream* bitStream, PacketPriority priority,
     PacketReliability reliability, char orderingChannel, bool shiftTimestamp)
 {
-    if (!pRakClient || !bitStream)
+    if (!bitStream)
         return false;
 
-    int rpcUniqueId = rpcId;
-    return pRakClient->RPC(&rpcUniqueId, bitStream, priority, reliability, orderingChannel, shiftTimestamp);
+    return GetInterface()->RPC(&rpcId, bitStream, priority, reliability, orderingChannel, shiftTimestamp);
 }
 
 bool TERakClient::SendPacket(BitStream* bitStream, PacketPriority priority,
     PacketReliability reliability, char orderingChannel)
 {
-    if (!pRakClient || !bitStream)
+    if (!bitStream)
         return false;
 
-    return pRakClient->Send(bitStream, priority, reliability, orderingChannel);
+    return GetInterface()->Send(bitStream, priority, reliability, orderingChannel);
+}
+
+void* TERakClient::GetOriginalRaw(size_t index)
+{
+    if (!originalVtable)
+        return nullptr;
+
+    void* fn = originalVtable[index];
+
+    te::sdk::helper::logging::Log(
+        "[te::sdk] GetOriginal[%zu] = %p",
+        index,
+        fn
+    );
+
+    return fn;
 }

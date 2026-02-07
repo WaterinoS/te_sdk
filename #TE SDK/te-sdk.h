@@ -62,10 +62,32 @@ namespace te::sdk
 
 namespace te::sdk::forwarder
 {
-    bool ForwardOutgoingRpc(uint8_t rpcId, void* bitStream, void* rakPeer);
-    bool ForwardIncomingRpc(uint8_t rpcId, void* bitStream, void* rakPeer);
-    bool ForwardOutgoingPacket(uint8_t packetId, void* bitStream, void* rakPeer);
-    bool ForwardIncomingPacket(uint8_t packetId, void* bitStream, void* rakPeer);
+    // Forward declarations of internal functions
+    bool OnOutgoingRpc(uint8_t rpcId, void* bitStream, void* rakPeer);
+    bool OnIncomingRpc(uint8_t rpcId, void* bitStream, void* rakPeer);
+    bool OnOutgoingPacket(uint8_t packetId, void* bitStream, void* rakPeer);
+    bool OnIncomingPacket(uint8_t packetId, void* bitStream, void* rakPeer);
+
+    // Inline wrappers
+    inline bool ForwardOutgoingRpc(uint8_t rpcId, void* bitStream, void* rakPeer)
+    {
+        return OnOutgoingRpc(rpcId, bitStream, rakPeer);
+    }
+
+    inline bool ForwardIncomingRpc(uint8_t rpcId, void* bitStream, void* rakPeer)
+    {
+        return OnIncomingRpc(rpcId, bitStream, rakPeer);
+    }
+
+    inline bool ForwardOutgoingPacket(uint8_t packetId, void* bitStream, void* rakPeer)
+    {
+        return OnOutgoingPacket(packetId, bitStream, rakPeer);
+    }
+
+    inline bool ForwardIncomingPacket(uint8_t packetId, void* bitStream, void* rakPeer)
+    {
+        return OnIncomingPacket(packetId, bitStream, rakPeer);
+    }
 
     struct HookForwarder
     {
