@@ -31,11 +31,11 @@ void* TERakClient::GetOriginalRaw(size_t index)
 
     void* fn = originalVtable[index];
 
-    te::sdk::helper::logging::Log(
-        "[te::sdk] GetOriginal[%zu] = %p",
-        index,
-        fn
-    );
+    //te::sdk::helper::logging::Log(
+    //    "[te::sdk] GetOriginal[%zu] = %p",
+    //    index,
+    //    fn
+    //);
 
     return fn;
 }
