@@ -64,7 +64,16 @@ namespace te::sdk::helper::samp
         {
             // Get chat info pointer
             uintptr_t* pChatInfo = reinterpret_cast<uintptr_t*>(sampBase + chatInfoOffset);
-            if (IsBadReadPtr(pChatInfo, sizeof(uintptr_t)) || !*pChatInfo)
+
+            // IsBadReadPtr is deprecated and unreliable; use VirtualQuery to validate the pointer
+            MEMORY_BASIC_INFORMATION mbi{};
+            bool isReadable = pChatInfo != nullptr &&
+                VirtualQuery(pChatInfo, &mbi, sizeof(mbi)) &&
+                (mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE)) &&
+                !(mbi.Protect & PAGE_GUARD) &&
+                !(mbi.Protect & PAGE_NOACCESS);
+
+            if (!isReadable || !*pChatInfo)
             {
                 te::sdk::helper::logging::Log("[SendChatMessage] Invalid chat info pointer for version %s",
                     te::sdk::helper::TranslateSAMPVersion(sampVersion).c_str());

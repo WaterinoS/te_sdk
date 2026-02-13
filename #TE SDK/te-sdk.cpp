@@ -101,7 +101,7 @@ namespace te::sdk
        0,       // serverPort
        0,       // clientPort
        false,   // isConnected
-       0,       // depreciated
+       0,       // deprecated
        0        // threadSleepTimer
     };
 
@@ -192,6 +192,10 @@ namespace te::sdk
 
         while (p != nullptr)
         {
+            // Guard against malformed packets with null or empty data
+            if (!p->data || p->length == 0)
+                break;
+
             uint8_t packetId = p->data[0];
 
             //Log("[te::sdk] Received packet with ID %d, length=%d", packetId, p->length);
@@ -293,7 +297,7 @@ namespace te::sdk
         strcpy_s(session.serverIP, sizeof(session.serverIP), host);
         session.serverPort = serverPort;
         session.clientPort = clientPort;
-        session.depreciated = depreciated;
+        session.deprecated = depreciated;
         session.threadSleepTimer = threadSleepTimer;
         session.isConnected = false;
 
@@ -325,15 +329,16 @@ namespace te::sdk
     }
 
     bool __fastcall hkHandleRpcPacket(void* rp, void*, const char* data, int length, PlayerID playerid) {
-        g_rakPeer = rp;
-        g_playerId = playerid;
-
+        // Validate parameters before caching them to avoid storing invalid state
         if (!rp || !data || length <= 0 || !oHandleRpcPacket) {
             if (oHandleRpcPacket) {
                 return oHandleRpcPacket(rp, data, length, playerid);
             }
             return false;
         }
+
+        g_rakPeer = rp;
+        g_playerId = playerid;
 
         try {
             RakNet::BitStream incoming(std::bit_cast<unsigned char*>(const_cast<char*>(data)),
@@ -614,6 +619,9 @@ namespace te::sdk
         if (!AttachRakNetHooks(rakClient))
         {
             Log("[te::sdk] Failed to attach RakNet hooks.");
+            // Clean up the allocated client to avoid a memory leak
+            delete LocalClient;
+            LocalClient = nullptr;
             return false;
         }
 

@@ -5,11 +5,12 @@ namespace te::sdk::helper
 	using namespace te::sdk::helper::logging;
 
     enum class SAMPVersionIndex : int {
-        v037r1 = 0,  // 0.3.7-R1
-        v037r31 = 1, // 0.3.7-R3-1  
-        v037r4 = 2,  // 0.3.7-R4
-        v03dlr1 = 3,  // 0.3DL-R1
-        v037r5 = 4  // 0.3-7-R5
+        Invalid  = -1, // Sentinel for unsupported or unknown versions
+        v037r1   =  0, // 0.3.7-R1
+        v037r31  =  1, // 0.3.7-R3-1
+        v037r4   =  2, // 0.3.7-R4
+        v03dlr1  =  3, // 0.3DL-R1
+        v037r5   =  4  // 0.3.7-R5
     };
 
     constexpr std::uintptr_t handle_rpc_packet_offsets[] = { 0x372f0, 0x3a6a0, 0x3ad90, 0x3a8a0, 0x3ADE0 };
@@ -19,39 +20,69 @@ namespace te::sdk::helper
         return reinterpret_cast<uintptr_t>(GetModuleHandleW(moduleName));
     }
 
+    // Read a DWORD from a given address without unnecessarily making memory writable.
+    // Temporarily elevates to PAGE_EXECUTE_READ only if the page is not already readable.
     static uint32_t ReadDWORD(uintptr_t address)
     {
+        void* ptr = reinterpret_cast<void*>(address);
+        MEMORY_BASIC_INFORMATION mbi{};
+        if (VirtualQuery(ptr, &mbi, sizeof(mbi)))
+        {
+            DWORD protect = mbi.Protect & 0xFF;
+            bool readable = (protect == PAGE_READONLY) ||
+                            (protect == PAGE_READWRITE) ||
+                            (protect == PAGE_EXECUTE_READ) ||
+                            (protect == PAGE_EXECUTE_READWRITE);
+            if (readable)
+                return *reinterpret_cast<uint32_t*>(address);
+        }
+
+        // Page is not readable; temporarily grant read access (not write)
         DWORD oldProtect;
-        VirtualProtect(reinterpret_cast<void*>(address), 4, PAGE_EXECUTE_READWRITE, &oldProtect);
+        VirtualProtect(ptr, 4, PAGE_EXECUTE_READ, &oldProtect);
         uint32_t value = *reinterpret_cast<uint32_t*>(address);
-        VirtualProtect(reinterpret_cast<void*>(address), 4, oldProtect, &oldProtect);
+        VirtualProtect(ptr, 4, oldProtect, &oldProtect);
         return value;
     }
 
+    // Cache the detected version so GetSAMPVersion() only scans memory once
+    static SAMPVersion g_cachedVersion = SAMPVersion::Unknown;
+    static bool g_versionCached = false;
+
     SAMPVersion GetSAMPVersion()
     {
+        if (g_versionCached)
+            return g_cachedVersion;
+
         uintptr_t sampBase = GetModuleBase(L"samp.dll");
         if (!sampBase)
             return SAMPVersion::Unknown;
 
+        SAMPVersion detected = SAMPVersion::Unknown;
+
         uint32_t val128 = ReadDWORD(sampBase + 0x128);
         switch (val128)
         {
-        case 0x5542F47A: return SAMPVersion::R1;
-        case 0x59C30C94: return SAMPVersion::R2;
-        case 0x5A6A3130: return SAMPVersion::DL;
+        case 0x5542F47A: detected = SAMPVersion::R1;  break;
+        case 0x59C30C94: detected = SAMPVersion::R2;  break;
+        case 0x5A6A3130: detected = SAMPVersion::DL;  break;
         }
 
-        uint32_t val120 = ReadDWORD(sampBase + 0x120);
-        switch (val120)
+        if (detected == SAMPVersion::Unknown)
         {
-        case 0x5C0B4243: return SAMPVersion::R3;
-        case 0x5DD606CD: return SAMPVersion::R4;
-        case 0x6094ACAB: return SAMPVersion::R4v2;
-        case 0x6372C39E: return SAMPVersion::R5;
+            uint32_t val120 = ReadDWORD(sampBase + 0x120);
+            switch (val120)
+            {
+            case 0x5C0B4243: detected = SAMPVersion::R3;   break;
+            case 0x5DD606CD: detected = SAMPVersion::R4;   break;
+            case 0x6094ACAB: detected = SAMPVersion::R4v2; break;
+            case 0x6372C39E: detected = SAMPVersion::R5;   break;
+            }
         }
 
-        return SAMPVersion::Unknown;
+        g_cachedVersion = detected;
+        g_versionCached = true;
+        return detected;
     }
 
     void* GetSAMPInfo()
@@ -126,13 +157,15 @@ namespace te::sdk::helper
         case SAMPVersion::R4:  return SAMPVersionIndex::v037r4;  // 0.3.7-R4
         case SAMPVersion::DL:  return SAMPVersionIndex::v03dlr1; // 0.3DL-R1
         case SAMPVersion::R5:  return SAMPVersionIndex::v037r5; // 0.3DL-R1
-        default: return static_cast<SAMPVersionIndex>(-1);
+        default: return SAMPVersionIndex::Invalid;
         }
     }
 
     std::uintptr_t GetHandleRpcPacketAddress() {
         SAMPVersionIndex versionIndex = GetSAMPVersionIndex();
-        if (static_cast<int>(versionIndex) < 0 || static_cast<int>(versionIndex) >= 5) {
+        // Use the typed sentinel instead of a raw integer comparison
+        if (versionIndex == SAMPVersionIndex::Invalid ||
+            static_cast<int>(versionIndex) >= static_cast<int>(std::size(handle_rpc_packet_offsets))) {
             return 0;
         }
 

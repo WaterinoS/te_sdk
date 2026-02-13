@@ -36,7 +36,7 @@ namespace te::sdk
         unsigned short serverPort;   // Server port
         unsigned short clientPort;   // Client port used for connection
         bool isConnected;            // Connection status
-        unsigned int depreciated;    // Depreciated parameter from Connect call
+        unsigned int deprecated;     // Deprecated parameter from Connect call
         int threadSleepTimer;        // Thread sleep timer from Connect call
     };
 

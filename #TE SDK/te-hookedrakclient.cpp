@@ -12,10 +12,11 @@ bool HookedRakClientInterface::Connect(const char* host, unsigned short serverPo
 
     auto& session = te::sdk::GetSessionInfo();
 
-    strcpy_s(session.serverIP, host);
+    // Pass explicit buffer size to prevent potential buffer overflow
+    strcpy_s(session.serverIP, sizeof(session.serverIP), host);
     session.serverPort = serverPort;
     session.clientPort = clientPort;
-    session.depreciated = depreciated;
+    session.deprecated = depreciated;
     session.threadSleepTimer = threadSleepTimer;
     session.isConnected = false;
 
