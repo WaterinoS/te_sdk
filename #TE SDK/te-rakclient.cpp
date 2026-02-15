@@ -1,5 +1,7 @@
 #include "te-sdk.h"
 
+using namespace RakNet;
+
 TERakClient::TERakClient(void* rawInterface, void** originalVtable)
 {
     this->raw = rawInterface;
@@ -30,12 +32,5 @@ void* TERakClient::GetOriginalRaw(size_t index)
         return nullptr;
 
     void* fn = originalVtable[index];
-
-    //te::sdk::helper::logging::Log(
-    //    "[te::sdk] GetOriginal[%zu] = %p",
-    //    index,
-    //    fn
-    //);
-
     return fn;
 }

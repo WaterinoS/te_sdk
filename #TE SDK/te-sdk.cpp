@@ -140,8 +140,6 @@ namespace te::sdk
     bool  __fastcall hkSend_CharPtr(void* thisPtr, void* edx, const char* data, int length,
         PacketPriority priority, PacketReliability reliability, char orderingChannel)
     {
-		//Log("[te::sdk] Sending packet with ID %d, length=%d", data ? static_cast<uint8_t>(data[0]) : -1, length);
-
         if (data && length > 0)
         {
             RakNet::BitStream bs(reinterpret_cast<unsigned char*>(const_cast<char*>(data)), length, false);
@@ -165,8 +163,6 @@ namespace te::sdk
     bool __fastcall hkSend_BitStream(void* thisPtr, void*, RakNet::BitStream* bitStream,
         PacketPriority priority, PacketReliability reliability, char orderingChannel)
     {
-		//Log("[te::sdk] Sending packet with ID %d", bitStream ? static_cast<uint8_t>(bitStream->GetData()[0]) : -1);
-
         if (bitStream)
         {
             uint8_t packetId = 0;
@@ -197,8 +193,6 @@ namespace te::sdk
                 break;
 
             uint8_t packetId = p->data[0];
-
-            //Log("[te::sdk] Received packet with ID %d, length=%d", packetId, p->length);
 
             RakNet::BitStream bs(p->data, p->length, true);
 
@@ -232,8 +226,6 @@ namespace te::sdk
             bs.ResetReadPointer();
         }
 
-       // Log("[te::sdk] Sending RPC with ID %d, bitLength=%u", uniqueID ? *uniqueID : -1, bitLength);
-
         return oRPC_CharPtr(thisPtr, uniqueID, data, bitLength, priority, reliability,
             orderingChannel, shiftTimestamp);
     }
@@ -247,8 +239,6 @@ namespace te::sdk
         RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
         char orderingChannel, bool shiftTimestamp)
     {
-		//Log("[te::sdk] Sending RPC with ID %d", uniqueID ? *uniqueID : -1);
-
         if (uniqueID && bitStream)
         {
             if (!g_forwarder.OutgoingRpc(static_cast<uint8_t>(*uniqueID), bitStream, thisPtr))
@@ -270,8 +260,6 @@ namespace te::sdk
         RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
         char orderingChannel, bool shiftTimestamp, NetworkID networkID)
     {
-		//Log("[te::sdk] Sending extended RPC with ID %d", uniqueID ? *uniqueID : -1);
-
         if (uniqueID && bitStream)
         {
             if (!g_forwarder.OutgoingRpc(static_cast<uint8_t>(*uniqueID), bitStream, thisPtr))
@@ -598,21 +586,19 @@ namespace te::sdk
             return false;
         }
 
-        void* rakClient = rakSlot ? *static_cast<void**>(rakSlot) : nullptr;
+        void* rakClient = *static_cast<void**>(rakSlot);
         if (!rakClient)
         {
             Log("[te::sdk] rakClient is null");
             return false;
         }
 
-        void** vtable = rakClient ? *reinterpret_cast<void***>(rakClient) : nullptr;
+        void** vtable = *reinterpret_cast<void***>(rakClient);
         if (!vtable)
         {
             Log("[te::sdk] originalVtable is null");
             return false;
         }
-
-        //Log("[te::sdk] Rak slot: %p, Rak client: %p, vtable: %p", rakSlot, rakClient, vtable);
 
         LocalClient = new TERakClient(rakClient, vtable);
 

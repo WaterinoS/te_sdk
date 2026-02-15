@@ -17,13 +17,15 @@ namespace te::sdk::helper::logging
         constexpr auto kLogFolderName = "te_sdk";
         constexpr auto kRetentionDuration = std::chrono::hours(72);
 
-        std::once_flag g_cleanupOnceFlag;
         std::once_flag g_logFileInitFlag;
         std::filesystem::path g_logFilePath;
 
         // Cached per-process metadata, populated once alongside g_logFileInitFlag
         std::string g_exeName;
         int g_pid = 0;
+
+        // Mod name set by user, included in session headers
+        char g_modName[64] = {};
 
         // Mutex protecting sessionReset and serialising concurrent Log() writes
         std::mutex g_logMutex;
@@ -64,6 +66,20 @@ namespace te::sdk::helper::logging
     // Protected by g_logMutex; written only in ResetSession() or the first Log() call
     static bool sessionReset = true;
 
+    void SetModName(const char* name)
+    {
+        std::lock_guard<std::mutex> lock(g_logMutex);
+        if (name)
+            strncpy_s(g_modName, sizeof(g_modName), name, _TRUNCATE);
+        else
+            g_modName[0] = '\0';
+    }
+
+    const char* GetModName()
+    {
+        return g_modName;
+    }
+
     void ResetSession()
     {
         std::lock_guard<std::mutex> lock(g_logMutex);
@@ -74,12 +90,6 @@ namespace te::sdk::helper::logging
     {
         // Initialise the log folder and file path exactly once, outside the lock
         const std::filesystem::path logFolder(kLogFolderName);
-
-        std::call_once(g_cleanupOnceFlag, [&logFolder]()
-            {
-                std::filesystem::create_directories(logFolder);
-                CleanupOldLogs(logFolder);
-            });
 
         std::call_once(g_logFileInitFlag, [&logFolder]()
             {
@@ -93,13 +103,20 @@ namespace te::sdk::helper::logging
 
                 g_pid = _getpid();
 
+                // Use mod name as subdirectory if set
+                std::filesystem::path actualFolder = logFolder;
+                if (g_modName[0] != '\0')
+                    actualFolder = logFolder / g_modName;
+
+                std::filesystem::create_directories(actualFolder);
+                CleanupOldLogs(actualFolder);
+
                 const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::system_clock::now().time_since_epoch()).count();
 
                 std::ostringstream filenameBuilder;
                 filenameBuilder << g_exeName << "_" << g_pid << "_" << timestamp << ".log";
-                g_logFilePath = logFolder / filenameBuilder.str();
-                std::filesystem::create_directories(logFolder);
+                g_logFilePath = actualFolder / filenameBuilder.str();
             });
 
         const std::string filepathStr = g_logFilePath.string();
@@ -120,17 +137,35 @@ namespace te::sdk::helper::logging
             std::tm tm_buf{};
             localtime_s(&tm_buf, &time_t_val);
 
-            fprintf(
-                file,
-                "=== SESSION START (%s, pid %d): %04d-%02d-%02d %02d:%02d:%02d ===\n",
-                g_exeName.c_str(),
-                g_pid,
-                tm_buf.tm_year + 1900,
-                tm_buf.tm_mon + 1,
-                tm_buf.tm_mday,
-                tm_buf.tm_hour,
-                tm_buf.tm_min,
-                tm_buf.tm_sec);
+            if (g_modName[0] != '\0')
+            {
+                fprintf(
+                    file,
+                    "=== SESSION START (%s | %s, pid %d): %04d-%02d-%02d %02d:%02d:%02d ===\n",
+                    g_modName,
+                    g_exeName.c_str(),
+                    g_pid,
+                    tm_buf.tm_year + 1900,
+                    tm_buf.tm_mon + 1,
+                    tm_buf.tm_mday,
+                    tm_buf.tm_hour,
+                    tm_buf.tm_min,
+                    tm_buf.tm_sec);
+            }
+            else
+            {
+                fprintf(
+                    file,
+                    "=== SESSION START (%s, pid %d): %04d-%02d-%02d %02d:%02d:%02d ===\n",
+                    g_exeName.c_str(),
+                    g_pid,
+                    tm_buf.tm_year + 1900,
+                    tm_buf.tm_mon + 1,
+                    tm_buf.tm_mday,
+                    tm_buf.tm_hour,
+                    tm_buf.tm_min,
+                    tm_buf.tm_sec);
+            }
 
             sessionReset = false;
         }

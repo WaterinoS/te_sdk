@@ -4,8 +4,6 @@
 #include "FullRakNet/PacketPriority.h"
 #include "FullRakNet/RakNetStatistics.h"
 
-using namespace RakNet;
-
 namespace te::sdk::detail {
     struct HookForwarder;
 }
@@ -29,7 +27,7 @@ public:
     virtual bool Send(const char* data, int length, PacketPriority priority, PacketReliability reliability,
         char orderingChannel);
 
-    virtual bool Send(BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
+    virtual bool Send(RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
         char orderingChannel);
 
     virtual Packet* Receive(void);
@@ -70,10 +68,10 @@ public:
     virtual bool RPC(int* uniqueID, const char* data, unsigned int bitLength, PacketPriority priority,
         PacketReliability reliability, char orderingChannel, bool shiftTimestamp);
 
-    virtual bool RPC(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
+    virtual bool RPC(int* uniqueID, RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
         char orderingChannel, bool shiftTimestamp);
 
-    virtual bool RPC_(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
+    virtual bool RPC_(int* uniqueID, RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability,
         char orderingChannel, bool shiftTimestamp, NetworkID networkID);
 
     virtual void SetTrackFrequencyTable(bool b);
@@ -88,11 +86,11 @@ public:
 
     virtual void DetachPlugin(void* messageHandler);
 
-    virtual BitStream* GetStaticServerData(void);
+    virtual RakNet::BitStream* GetStaticServerData(void);
 
     virtual void SetStaticServerData(const char* data, int length);
 
-    virtual BitStream* GetStaticClientData(PlayerID playerId);
+    virtual RakNet::BitStream* GetStaticClientData(PlayerID playerId);
 
     virtual void SetStaticClientData(PlayerID playerId, const char* data, int length);
 

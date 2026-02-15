@@ -5,8 +5,6 @@
 #include "FullRakNet/PacketPriority.h"
 #include "FullRakNet/RakNetStatistics.h"
 
-using namespace RakNet;
-
 class local_RakClientInterface
 {
 public:
@@ -18,7 +16,7 @@ public:
     virtual void SetPassword(const char*) = 0;
     virtual bool HasPassword(void) const = 0;
     virtual bool Send(const char*, int, PacketPriority, PacketReliability, char) = 0;
-    virtual bool Send(BitStream*, PacketPriority, PacketReliability, char) = 0;
+    virtual bool Send(RakNet::BitStream*, PacketPriority, PacketReliability, char) = 0;
     virtual Packet* Receive(void) = 0;
     virtual void DeallocatePacket(Packet*) = 0;
     virtual void PingServer(void) = 0;
@@ -37,17 +35,17 @@ public:
     virtual void RegisterClassMemberRPC(int*, void*) = 0;
     virtual void UnregisterAsRemoteProcedureCall(int*) = 0;
     virtual bool RPC(int*, const char*, unsigned int, PacketPriority, PacketReliability, char, bool) = 0;
-    virtual bool RPC(int*, BitStream*, PacketPriority, PacketReliability, char, bool) = 0;
-    virtual bool RPC_(int*, BitStream*, PacketPriority, PacketReliability, char, bool, NetworkID) = 0;
+    virtual bool RPC(int*, RakNet::BitStream*, PacketPriority, PacketReliability, char, bool) = 0;
+    virtual bool RPC_(int*, RakNet::BitStream*, PacketPriority, PacketReliability, char, bool, NetworkID) = 0;
     virtual void SetTrackFrequencyTable(bool) = 0;
     virtual bool GetSendFrequencyTable(unsigned int[256]) = 0;
     virtual float GetCompressionRatio(void) const = 0;
     virtual float GetDecompressionRatio(void) const = 0;
     virtual void AttachPlugin(void*) = 0;
     virtual void DetachPlugin(void*) = 0;
-    virtual BitStream* GetStaticServerData(void) = 0;
+    virtual RakNet::BitStream* GetStaticServerData(void) = 0;
     virtual void SetStaticServerData(const char*, int) = 0;
-    virtual BitStream* GetStaticClientData(PlayerID) = 0;
+    virtual RakNet::BitStream* GetStaticClientData(PlayerID) = 0;
     virtual void SetStaticClientData(PlayerID, const char*, int) = 0;
     virtual void SendStaticClientDataToServer(void) = 0;
     virtual PlayerID GetServerID(void) const = 0;
@@ -88,33 +86,33 @@ public:
         return &wrapper;
     }
 
-    bool SendRPC(int rpcId, BitStream* bitStream, PacketPriority priority,
+    bool SendRPC(int rpcId, RakNet::BitStream* bitStream, PacketPriority priority,
         PacketReliability reliability, char orderingChannel, bool shiftTimestamp);
 
-    bool SendPacket(BitStream* bitStream, PacketPriority priority,
+    bool SendPacket(RakNet::BitStream* bitStream, PacketPriority priority,
         PacketReliability reliability, char orderingChannel);
 
-    bool SendRPC(int rpcId, BitStream* bitStream)
+    bool SendRPC(int rpcId, RakNet::BitStream* bitStream)
     {
         return SendRPC(rpcId, bitStream, HIGH_PRIORITY, RELIABLE_ORDERED, 0, false);
     }
 
-    bool SendRPC(int rpcId, BitStream* bitStream, PacketPriority priority, PacketReliability reliability)
+    bool SendRPC(int rpcId, RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability)
     {
         return SendRPC(rpcId, bitStream, priority, reliability, 0, false);
     }
 
-    bool SendRPC(int rpcId, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel)
+    bool SendRPC(int rpcId, RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel)
     {
         return SendRPC(rpcId, bitStream, priority, reliability, orderingChannel, false);
     }
 
-    bool SendPacket(BitStream* bitStream)
+    bool SendPacket(RakNet::BitStream* bitStream)
     {
         return SendPacket(bitStream, HIGH_PRIORITY, RELIABLE_ORDERED, 0);
     }
 
-    bool SendPacket(BitStream* bitStream, PacketPriority priority, PacketReliability reliability)
+    bool SendPacket(RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability)
     {
         return SendPacket(bitStream, priority, reliability, 0);
     }
@@ -173,9 +171,9 @@ private:
             return fn(owner->raw, data, length, priority, reliability, orderingChannel);
         }
 
-        bool Send(BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel) override
+        bool Send(RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel) override
         {
-            using Fn = bool(__thiscall*)(void*, BitStream*, PacketPriority, PacketReliability, char);
+            using Fn = bool(__thiscall*)(void*, RakNet::BitStream*, PacketPriority, PacketReliability, char);
             Fn fn = owner->GetOriginal<Fn>(6);
             return fn(owner->raw, bitStream, priority, reliability, orderingChannel);
         }
@@ -306,16 +304,16 @@ private:
             return fn(owner->raw, uniqueID, data, bitLength, priority, reliability, orderingChannel, shiftTimestampByClientTime);
         }
 
-        bool RPC(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestampByClientTime) override
+        bool RPC(int* uniqueID, RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestampByClientTime) override
         {
-            using Fn = bool(__thiscall*)(void*, int*, BitStream*, PacketPriority, PacketReliability, char, bool);
+            using Fn = bool(__thiscall*)(void*, int*, RakNet::BitStream*, PacketPriority, PacketReliability, char, bool);
             Fn fn = owner->GetOriginal<Fn>(25);
             return fn(owner->raw, uniqueID, bitStream, priority, reliability, orderingChannel, shiftTimestampByClientTime);
         }
 
-        bool RPC_(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestampByClientTime, NetworkID networkID) override
+        bool RPC_(int* uniqueID, RakNet::BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestampByClientTime, NetworkID networkID) override
         {
-            using Fn = bool(__thiscall*)(void*, int*, BitStream*, PacketPriority, PacketReliability, char, bool, NetworkID);
+            using Fn = bool(__thiscall*)(void*, int*, RakNet::BitStream*, PacketPriority, PacketReliability, char, bool, NetworkID);
             Fn fn = owner->GetOriginal<Fn>(27);
             return fn(owner->raw, uniqueID, bitStream, priority, reliability, orderingChannel, shiftTimestampByClientTime, networkID);
         }
@@ -362,9 +360,9 @@ private:
             fn(owner->raw, plugin);
         }
 
-        BitStream* GetStaticServerData(void) override
+        RakNet::BitStream* GetStaticServerData(void) override
         {
-            using Fn = BitStream * (__thiscall*)(void*);
+            using Fn = RakNet::BitStream * (__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(34);
             return fn(owner->raw);
         }
@@ -376,9 +374,9 @@ private:
             fn(owner->raw, data, length);
         }
 
-        BitStream* GetStaticClientData(PlayerID playerId) override
+        RakNet::BitStream* GetStaticClientData(PlayerID playerId) override
         {
-            using Fn = BitStream * (__thiscall*)(void*, PlayerID);
+            using Fn = RakNet::BitStream * (__thiscall*)(void*, PlayerID);
             Fn fn = owner->GetOriginal<Fn>(36);
             return fn(owner->raw, playerId);
         }

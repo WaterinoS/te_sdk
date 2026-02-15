@@ -58,8 +58,6 @@ bool HookedRakClientInterface::HasPassword(void) const
 
 bool HookedRakClientInterface::Send(const char* data, int length, PacketPriority priority, PacketReliability reliability, char orderingChannel)
 {
-	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::Send called");
-
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (data && length > 0 && forwarder)
@@ -80,7 +78,6 @@ bool HookedRakClientInterface::Send(const char* data, int length, PacketPriority
 
 bool HookedRakClientInterface::Send(BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel)
 {
-	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::Send called");
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (bitStream && forwarder)
@@ -229,8 +226,6 @@ void HookedRakClientInterface::UnregisterAsRemoteProcedureCall(int* uniqueID)
 
 bool HookedRakClientInterface::RPC(int* uniqueID, const char* data, unsigned int bitLength, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp)
 {
-	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::RPC called");
-
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (uniqueID && data && bitLength > 0 && forwarder)
@@ -247,8 +242,6 @@ bool HookedRakClientInterface::RPC(int* uniqueID, const char* data, unsigned int
 
 bool HookedRakClientInterface::RPC(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp)
 {
-	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::RPC called");
-
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (uniqueID && bitStream && forwarder)
@@ -264,8 +257,6 @@ bool HookedRakClientInterface::RPC(int* uniqueID, BitStream* bitStream, PacketPr
 
 bool HookedRakClientInterface::RPC_(int* uniqueID, BitStream* bitStream, PacketPriority priority, PacketReliability reliability, char orderingChannel, bool shiftTimestamp, NetworkID networkID)
 {
-	//te::sdk::helper::Log("[te::sdk] HookedRakClientInterface::RPC_ called");
-
     if (!LocalClient || !LocalClient->GetInterface()) return false;
 
     if (uniqueID && bitStream && forwarder)

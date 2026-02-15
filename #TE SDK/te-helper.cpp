@@ -1,5 +1,7 @@
 #include "te-sdk.h"
 
+using namespace RakNet;
+
 namespace te::sdk::helper
 {
 	using namespace te::sdk::helper::logging;
@@ -18,6 +20,11 @@ namespace te::sdk::helper
     static uintptr_t GetModuleBase(const wchar_t* moduleName)
     {
         return reinterpret_cast<uintptr_t>(GetModuleHandleW(moduleName));
+    }
+
+    uintptr_t GetSAMPBase()
+    {
+        return GetModuleBase(L"samp.dll");
     }
 
     // Read a DWORD from a given address without unnecessarily making memory writable.
@@ -156,7 +163,7 @@ namespace te::sdk::helper
         case SAMPVersion::R3:  return SAMPVersionIndex::v037r31; // 0.3.7-R3-1
         case SAMPVersion::R4:  return SAMPVersionIndex::v037r4;  // 0.3.7-R4
         case SAMPVersion::DL:  return SAMPVersionIndex::v03dlr1; // 0.3DL-R1
-        case SAMPVersion::R5:  return SAMPVersionIndex::v037r5; // 0.3DL-R1
+        case SAMPVersion::R5:  return SAMPVersionIndex::v037r5; // 0.3.7-R5
         default: return SAMPVersionIndex::Invalid;
         }
     }

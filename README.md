@@ -338,10 +338,22 @@ bool OnIncomingRPC(const te::sdk::RpcContext& ctx)
 Use the built-in logging system:
 
 ```cpp
+// Set your mod name (shown in session headers)
+te::sdk::helper::logging::SetModName("MyMod v1.0");
+
+// Log messages (printf-style formatting)
 te::sdk::helper::logging::Log("Message: %s, Value: %d", "test", 123);
+
+// Get the current mod name
+const char* name = te::sdk::helper::logging::GetModName();
 ```
 
-Logs are written to a file for debugging purposes.
+Logs are written to `te_sdk/` folder with session headers:
+```
+=== SESSION START (MyMod v1.0 | game.exe, pid 1234): 2025-01-07 15:30:45 ===
+```
+
+If `SetModName()` is not called, the session header uses the executable name only.
 
 ---
 
@@ -359,6 +371,17 @@ void* sampInfo = te::sdk::helper::GetSAMPInfo();
 
 // Get RakNet interface
 void* rakNet = te::sdk::helper::GetRakNetInterface();
+
+// Get samp.dll base address
+uintptr_t base = te::sdk::helper::GetSAMPBase();
+
+// Safe memory read/write templates
+uint32_t val = te::sdk::helper::ReadMemory<uint32_t>(address);
+bool ok = te::sdk::helper::WriteMemory<uint32_t>(address, newValue);
+
+// Extract RPC data from raw packet bytes
+te::sdk::helper::ExtractedRPC rpc;
+te::sdk::helper::ExtractRPCData(data, length, rpc);
 ```
 
 **SAMPVersion enum:**
@@ -375,6 +398,68 @@ enum class SAMPVersion
     R5       // 0.3.7-R5
 };
 ```
+
+---
+
+## SA-MP Helper Functions
+
+All functions are in the `te::sdk::helper::samp` namespace and support all SA-MP versions (R1, R2, R3, R4, R4v2, R5, DL).
+
+### Chat
+
+```cpp
+// Add a message to the SA-MP chat window
+te::sdk::helper::samp::AddChatMessage("Hello!", 0xFF00FF00);
+
+// Send a command to the server
+te::sdk::helper::samp::SendCommand("/kill");
+```
+
+### Player Info
+
+```cpp
+// Get local player name
+const char* name = te::sdk::helper::samp::GetPlayerName();
+
+// Get local player ID (-1 on failure)
+int id = te::sdk::helper::samp::GetPlayerId();
+```
+
+### Server Info
+
+```cpp
+// Get the server hostname
+const char* hostname = te::sdk::helper::samp::GetServerName();
+```
+
+### Game State
+
+```cpp
+// Check if connected to a server (game state >= 5)
+bool loaded = te::sdk::helper::samp::IsGameLoaded();
+
+// Check if player is fully spawned (game state == 14 + CLocalPlayer valid)
+bool spawned = te::sdk::helper::samp::IsPlayerSpawned();
+```
+
+### Custom Chat Commands
+
+Register client-side command handlers that intercept commands before they're sent to the server:
+
+```cpp
+// Register a command (without the '/' prefix)
+te::sdk::helper::samp::RegisterChatCommand("hello", [](const char* params) {
+    te::sdk::helper::samp::AddChatMessage("Hello world!", 0xFFFFFFFF);
+});
+
+// Command with parameters
+te::sdk::helper::samp::RegisterChatCommand("tp", [](const char* params) {
+    // params contains everything after "/tp "
+    te::sdk::helper::logging::Log("Teleport params: %s", params);
+});
+```
+
+Commands are case-insensitive. If a registered command is typed, it is **not** forwarded to the server.
 
 ---
 
