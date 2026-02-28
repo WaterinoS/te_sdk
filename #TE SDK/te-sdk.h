@@ -56,6 +56,9 @@ namespace te::sdk
     extern TERakClient* LocalClient;
     SessionInfo& GetSessionInfo();
 
+    // Replay a previously blocked RPC through the original handler, bypassing TE hooks
+    void ReplayIncomingRPC(uint8_t rpcId, const uint8_t* data, int numBytes);
+
     static_assert(sizeof(PacketContext) == 12, "PacketContext must be 12 bytes on 32-bit");
     static_assert(sizeof(RpcContext) == 12, "RpcContext must be 12 bytes on 32-bit");
 }

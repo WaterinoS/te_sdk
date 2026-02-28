@@ -416,6 +416,35 @@ namespace te::sdk
         }
     }
 
+    void ReplayIncomingRPC(uint8_t rpcId, const uint8_t* data, int numBytes)
+    {
+        if (!oHandleRpcPacket || !g_rakPeer)
+        {
+            Log("[te::sdk] Cannot replay RPC %d: hook not initialized", rpcId);
+            return;
+        }
+
+        // Construct packet in the same format as hkHandleRpcPacket passes to oHandleRpcPacket:
+        // [1 byte header (not timestamp)] [1 byte rpcId] [compressed bit count] [data bits]
+        RakNet::BitStream replay;
+        replay.Write<uint8_t>(0);  // header byte (not ID_TIMESTAMP)
+        replay.Write<uint8_t>(rpcId);
+        unsigned int dataBits = static_cast<unsigned int>(numBytes * 8);
+        replay.WriteCompressed(dataBits);
+        if (dataBits > 0)
+        {
+            replay.WriteBits(data, dataBits, false);
+        }
+
+        // Call original handler directly, bypassing TE hooks
+        oHandleRpcPacket(g_rakPeer,
+            std::bit_cast<const char*>(replay.GetData()),
+            replay.GetNumberOfBytesUsed(),
+            g_playerId);
+
+        Log("[te::sdk] Replayed blocked RPC %d (%d bytes)", rpcId, numBytes);
+    }
+
     bool AttachHandleRpcPacketHook() {
         std::uintptr_t handleRpcPacketAddr = helper::GetHandleRpcPacketAddress();
         if (!handleRpcPacketAddr) {
