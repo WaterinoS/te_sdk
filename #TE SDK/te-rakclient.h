@@ -397,23 +397,29 @@ private:
 
         PlayerID GetServerID(void) const override
         {
-            using Fn = PlayerID(__thiscall*)(void*);
-            Fn fn = owner->GetOriginal<Fn>(39);
-            return fn(owner->raw);
+            using Fn = void(__thiscall*)(void*, PlayerID*);
+            Fn fn = reinterpret_cast<Fn>(owner->GetOriginalRaw(39));
+            PlayerID result{};
+            fn(owner->raw, &result);
+            return result;
         }
 
         PlayerID GetPlayerID(void) const override
         {
-            using Fn = PlayerID(__thiscall*)(void*);
-            Fn fn = owner->GetOriginal<Fn>(40);
-            return fn(owner->raw);
+            using Fn = void(__thiscall*)(void*, PlayerID*);
+            Fn fn = reinterpret_cast<Fn>(owner->GetOriginalRaw(40));
+            PlayerID result{};
+            fn(owner->raw, &result);
+            return result;
         }
 
         PlayerID GetInternalID(void) const override
         {
-            using Fn = PlayerID(__thiscall*)(void*);
-            Fn fn = owner->GetOriginal<Fn>(41);
-            return fn(owner->raw);
+            using Fn = void(__thiscall*)(void*, PlayerID*);
+            Fn fn = reinterpret_cast<Fn>(owner->GetOriginalRaw(41));
+            PlayerID result{};
+            fn(owner->raw, &result);
+            return result;
         }
 
         const char* PlayerIDToDottedIP(PlayerID playerId) const override
