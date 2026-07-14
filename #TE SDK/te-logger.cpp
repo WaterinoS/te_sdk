@@ -9,6 +9,7 @@
 #include <string>
 #include <process.h>
 #include <mutex>
+#include <atomic>
 
 namespace te::sdk::helper::logging
 {
@@ -23,6 +24,10 @@ namespace te::sdk::helper::logging
         // Cached per-process metadata, populated once alongside g_logFileInitFlag
         std::string g_exeName;
         int g_pid = 0;
+
+        // Master switch for file logging. When false, Log() bails out before
+        // touching the filesystem, so no te_sdk folder is ever created.
+        std::atomic<bool> g_loggingEnabled{ true };
 
         // Mod name set by user, included in session headers
         char g_modName[64] = {};
@@ -66,6 +71,16 @@ namespace te::sdk::helper::logging
     // Protected by g_logMutex; written only in ResetSession() or the first Log() call
     static bool sessionReset = true;
 
+    void SetLoggingEnabled(bool enabled)
+    {
+        g_loggingEnabled.store(enabled, std::memory_order_relaxed);
+    }
+
+    bool IsLoggingEnabled()
+    {
+        return g_loggingEnabled.load(std::memory_order_relaxed);
+    }
+
     void SetModName(const char* name)
     {
         std::lock_guard<std::mutex> lock(g_logMutex);
@@ -88,6 +103,11 @@ namespace te::sdk::helper::logging
 
     void Log(const char* fmt, ...)
     {
+        // Bail out before touching the filesystem when logging is disabled, so
+        // the te_sdk folder and log files are never created.
+        if (!g_loggingEnabled.load(std::memory_order_relaxed))
+            return;
+
         // Initialise the log folder and file path exactly once, outside the lock
         const std::filesystem::path logFolder(kLogFolderName);
 
