@@ -11,11 +11,14 @@ namespace te::sdk::helper
         v037r1   =  0, // 0.3.7-R1
         v037r31  =  1, // 0.3.7-R3-1
         v037r4   =  2, // 0.3.7-R4
-        v03dlr1  =  3, // 0.3DL-R1
-        v037r5   =  4  // 0.3.7-R5
+        v03dlr1  =  3, // 0.3.DL-R1
+        v037r5   =  4, // 0.3.7-R5
+        v037r2   =  5  // 0.3.7-R2 (appended - keep in sync with the offsets array below)
     };
 
-    constexpr std::uintptr_t handle_rpc_packet_offsets[] = { 0x372f0, 0x3a6a0, 0x3ad90, 0x3a8a0, 0x3ADE0 };
+    // Indexed by SAMPVersionIndex. R2's HandleRPCPacket sits right next to R1's
+    // (0x372F0), differing by only 0xE0 - consistent with R1/R2 being adjacent builds.
+    constexpr std::uintptr_t handle_rpc_packet_offsets[] = { 0x372f0, 0x3a6a0, 0x3ad90, 0x3a8a0, 0x3ADE0, 0x373D0 };
 
     static uintptr_t GetModuleBase(const wchar_t* moduleName)
     {
@@ -160,9 +163,10 @@ namespace te::sdk::helper
 
         switch (ver) {
         case SAMPVersion::R1: return SAMPVersionIndex::v037r1;  // 0.3.7-R1
+        case SAMPVersion::R2:  return SAMPVersionIndex::v037r2;  // 0.3.7-R2
         case SAMPVersion::R3:  return SAMPVersionIndex::v037r31; // 0.3.7-R3-1
         case SAMPVersion::R4:  return SAMPVersionIndex::v037r4;  // 0.3.7-R4
-        case SAMPVersion::DL:  return SAMPVersionIndex::v03dlr1; // 0.3DL-R1
+        case SAMPVersion::DL:  return SAMPVersionIndex::v03dlr1; // 0.3.DL-R1
         case SAMPVersion::R5:  return SAMPVersionIndex::v037r5; // 0.3.7-R5
         default: return SAMPVersionIndex::Invalid;
         }

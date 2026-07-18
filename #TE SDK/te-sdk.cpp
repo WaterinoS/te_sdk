@@ -480,6 +480,7 @@ namespace te::sdk
 
     bool IsSupportedSAMPVersion(helper::SAMPVersion version) {
         return version == helper::SAMPVersion::R1 ||
+            version == helper::SAMPVersion::R2 ||
             version == helper::SAMPVersion::R3 ||
             version == helper::SAMPVersion::R4 ||
             version == helper::SAMPVersion::R5 ||

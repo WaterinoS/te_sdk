@@ -16,8 +16,8 @@ namespace te::sdk::helper::samp
 	// Get local player name
 	const char* GetPlayerName();
 
-	// Get local player ID (-1 on failure)
-	int GetPlayerId();
+	// Get local player ID as its true uint16 width (0xFFFF = INVALID_PLAYER_ID on failure)
+	uint16_t GetPlayerId();
 
 	// Check if connected to a server (game state >= 5)
 	bool IsGameLoaded();

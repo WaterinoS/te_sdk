@@ -355,18 +355,22 @@ namespace te::sdk::helper::samp
         return reinterpret_cast<const char*>(nameAddr);
     }
 
-    int GetPlayerId()
+    uint16_t GetPlayerId()
     {
+        // SA:MP stores the local player id as a uint16 at playerPoolLocalId; reading it
+        // as a 32-bit int pulled in the adjacent struct field as the high 16 bits (garbage),
+        // so callers had to mask & 0xFFFF. Read it at its real width and return the SA:MP
+        // INVALID_PLAYER_ID sentinel (0xFFFF) on failure.
         const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets) return -1;
+        if (!offsets) return 0xFFFF;
 
         void* playerPool = GetPlayerPool();
-        if (!playerPool) return -1;
+        if (!playerPool) return 0xFFFF;
 
         uintptr_t idAddr = reinterpret_cast<uintptr_t>(playerPool) + offsets->playerPoolLocalId;
-        if (!IsValidPtr(reinterpret_cast<void*>(idAddr))) return -1;
+        if (!IsValidPtr(reinterpret_cast<void*>(idAddr))) return 0xFFFF;
 
-        return *reinterpret_cast<int*>(idAddr);
+        return *reinterpret_cast<uint16_t*>(idAddr);
     }
 
     bool IsGameLoaded()
