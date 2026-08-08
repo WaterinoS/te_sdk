@@ -18,6 +18,7 @@
 #include <map>
 #include <chrono>
 #include <mutex>
+#include <functional>
 
 #include <filesystem>
 namespace fs = std::filesystem;

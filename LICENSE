@@ -1,0 +1,38 @@
+TE SDK License
+==============
+
+Copyright (c) TE SDK authors. All rights reserved.
+
+TE SDK is released as freeware.
+
+Permitted
+---------
+- Use of the library in binary form, by linking the distributed `.lib` into
+  your own project, including in closed-source and commercial projects.
+- Distributing your own project that links against TE SDK in binary form.
+
+Not permitted
+-------------
+- Modifying the source code of TE SDK.
+- Redistributing or publishing the source code of TE SDK, in whole or in part,
+  whether modified or unmodified.
+- Removing or altering this notice.
+
+Third-party components
+----------------------
+This project embeds parts of RakNet 3.x (see the `FullRakNet` directory),
+Copyright (c) 2003 Kevin Jenkins, which carries its own license terms - refer
+to the headers of the files in that directory.
+
+The build additionally depends on MinHook (BSD 2-Clause), which is consumed as
+an external package and is not redistributed as part of this repository.
+
+Disclaimer
+----------
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -1,442 +1,509 @@
 #include "te-sdk.h"
+
 #include <MinHook.h>
 #include <cctype>
+#include <cstring>
+#include <atomic>
+#include <map>
+#include <mutex>
+#include <string>
 
 namespace te::sdk::helper::samp
 {
     using namespace te::sdk::helper::logging;
 
-    // ---- Offset Table ----
-
-    struct SAMPOffsets {
-        uintptr_t pInput;
-        uintptr_t szHostname;
-        uintptr_t iGameState;
-        uintptr_t pPools;
-        uintptr_t poolsPlayerPool;
-        uintptr_t playerPoolLocalId;
-        uintptr_t playerPoolLocalName;
-        uintptr_t playerPoolLocalPlayer;
-        uintptr_t fnSendCmd;
-    };
-
-    static const SAMPOffsets g_offsets[] = {
-        // R1
-        { 0x21A0E8, 0x121, 0x3BD, 0x3CD, 0x18, 0x4,    0xA,    0x22,   0x65C60 },
-        // R2
-        { 0x21A0F0, 0x11D, 0x3B5, 0x3C5, 0x8,  0x0,    0x6,    0x1E,   0x65D30 },
-        // DL
-        { 0x2ACA14, 0x131, 0x3D5, 0x3DE, 0x8,  0x2F1C, 0x2F20, 0x2F3A, 0x69340 },
-        // R3
-        { 0x26E8CC, 0x131, 0x3CD, 0x3DE, 0x8,  0x2F1C, 0x2F20, 0x2F3A, 0x69190 },
-        // R4
-        { 0x26E9FC, 0x131, 0x3CD, 0x3DE, 0x8,  0x2F1C, 0x2F20, 0x2F3A, 0x698C0 },
-        // R4v2
-        { 0x26E9FC, 0x131, 0x3CD, 0x3DE, 0x8,  0x2F1C, 0x2F20, 0x2F3A, 0x698C0 },
-        // R5
-        { 0x26EB84, 0x131, 0x3CD, 0x3DE, 0x4,  0x2F1C, 0x2F20, 0x2F3A, 0x69900 },
-    };
-
-    // Maps SAMPVersion enum to g_offsets index
-    static int VersionToIndex(te::sdk::helper::SAMPVersion ver)
+    namespace
     {
-        switch (ver)
+        // ---- pointer-chain helpers ----
+
+        template<typename T>
+        bool ReadAt(uintptr_t address, T& out)
         {
-        case SAMPVersion::R1:   return 0;
-        case SAMPVersion::R2:   return 1;
-        case SAMPVersion::DL:   return 2;
-        case SAMPVersion::R3:   return 3;
-        case SAMPVersion::R4:   return 4;
-        case SAMPVersion::R4v2: return 5;
-        case SAMPVersion::R5:   return 6;
-        default:                return -1;
+            if (!IsReadable(reinterpret_cast<const void*>(address), sizeof(T)))
+                return false;
+            out = *reinterpret_cast<const T*>(address);
+            return true;
         }
-    }
 
-    // ---- Internal Helpers ----
-
-    static const SAMPOffsets* GetOffsets()
-    {
-        int idx = VersionToIndex(GetSAMPVersion());
-        if (idx < 0) return nullptr;
-        return &g_offsets[idx];
-    }
-
-    static bool IsValidPtr(void* ptr)
-    {
-        if (!ptr) return false;
-        MEMORY_BASIC_INFORMATION mbi{};
-        if (!VirtualQuery(ptr, &mbi, sizeof(mbi))) return false;
-        if (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) return false;
-        return (mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE)) != 0;
-    }
-
-    static void* GetPlayerPool()
-    {
-        const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets) return nullptr;
-
-        void* netGame = GetSAMPInfo();
-        if (!netGame) return nullptr;
-
-        uintptr_t pPoolsAddr = reinterpret_cast<uintptr_t>(netGame) + offsets->pPools;
-        if (!IsValidPtr(reinterpret_cast<void*>(pPoolsAddr))) return nullptr;
-
-        void* pools = *reinterpret_cast<void**>(pPoolsAddr);
-        if (!IsValidPtr(pools)) return nullptr;
-
-        uintptr_t pPlayerPoolAddr = reinterpret_cast<uintptr_t>(pools) + offsets->poolsPlayerPool;
-        if (!IsValidPtr(reinterpret_cast<void*>(pPlayerPoolAddr))) return nullptr;
-
-        void* playerPool = *reinterpret_cast<void**>(pPlayerPoolAddr);
-        return IsValidPtr(playerPool) ? playerPool : nullptr;
-    }
-
-    // Read MSVC x86 std::string from memory (R1/R2 only)
-    // Layout: [16-byte SSO buffer][4-byte size][4-byte capacity] = 24 bytes
-    static const char* ReadStdString(uintptr_t addr)
-    {
-        if (!IsValidPtr(reinterpret_cast<void*>(addr))) return "";
-
-        uint32_t capacity = *reinterpret_cast<uint32_t*>(addr + 20);
-        if (capacity <= 15)
+        void* GetPlayerPool()
         {
-            // SSO: string data is inline at addr
-            return reinterpret_cast<const char*>(addr);
+            const VersionProfile* profile = GetVersionProfile();
+            if (!profile)
+                return nullptr;
+
+            void* netGame = GetSAMPInfo();
+            if (!netGame)
+                return nullptr;
+
+            void* pools = nullptr;
+            if (!ReadAt(reinterpret_cast<uintptr_t>(netGame) + profile->netGamePools, pools) || !pools)
+                return nullptr;
+
+            void* playerPool = nullptr;
+            if (!ReadAt(reinterpret_cast<uintptr_t>(pools) + profile->poolsPlayerPool, playerPool))
+                return nullptr;
+
+            return playerPool;
         }
-        else
+
+        // Copy a NUL-terminated string out of game memory, bounded both by
+        // `maxLength` and by where the readable region ends.
+        std::string CopyGameString(uintptr_t address, size_t maxLength)
         {
-            // Heap-allocated: first pointer in the buffer is the data pointer
-            const char* heapPtr = *reinterpret_cast<const char**>(addr);
-            return IsValidPtr(const_cast<char*>(heapPtr)) ? heapPtr : "";
-        }
-    }
+            std::string result;
+            if (!address)
+                return result;
 
-    // ---- RegisterChatCommand Hook Infrastructure ----
-
-    using tSendCmd = void(__thiscall*)(void* pInput, const char* command);
-    static std::map<std::string, ChatCommandCallback> g_registeredCommands;
-    static std::mutex g_cmdMutex;
-    static tSendCmd oSendCmd = nullptr;
-    static bool g_cmdHookInstalled = false;
-
-    static void __fastcall hkSendCmd(void* pInput, void* /*edx*/, const char* command)
-    {
-        if (command && command[0] == '/')
-        {
-            // Parse command name (first word after '/')
-            const char* cmdStart = command + 1;
-            const char* space = cmdStart;
-            while (*space && *space != ' ') ++space;
-
-            std::string cmdName(cmdStart, space);
-            // Lowercase for case-insensitive matching
-            for (auto& c : cmdName) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-
-            std::lock_guard<std::mutex> lock(g_cmdMutex);
-            auto it = g_registeredCommands.find(cmdName);
-            if (it != g_registeredCommands.end())
+            result.reserve(32);
+            for (size_t i = 0; i < maxLength; ++i)
             {
-                // Skip whitespace after command name to get params
-                const char* params = space;
-                while (*params == ' ') ++params;
+                char c = '\0';
+                if (!ReadAt(address + i, c))
+                    break;
+                if (c == '\0')
+                    break;
+                result.push_back(c);
+            }
+            return result;
+        }
 
-                it->second(params);
-                return; // Don't forward to server
+        // Read an MSVC x86 std::string out of memory (R1/R2 local player name).
+        // Layout: [16-byte SSO buffer][4-byte size][4-byte capacity] = 24 bytes
+        std::string ReadStdString(uintptr_t address)
+        {
+            uint32_t capacity = 0;
+            if (!ReadAt(address + 20, capacity))
+                return {};
+
+            uint32_t size = 0;
+            if (!ReadAt(address + 16, size))
+                return {};
+
+            if (capacity <= 15)
+            {
+                // SSO: string data is inline at `address`
+                return CopyGameString(address, 16);
+            }
+
+            uintptr_t heapPtr = 0;
+            if (!ReadAt(address, heapPtr) || !heapPtr)
+                return {};
+
+            // Trust the region walk over `size`, which may be garbage if we are
+            // reading a half-initialised string
+            return CopyGameString(heapPtr, size > 0 && size < 4096 ? size : 256);
+        }
+
+        // Returns a stable pointer for a value that lives in game memory.
+        // One buffer per thread, so two threads never stomp on each other.
+        const char* Stabilise(std::string&& value)
+        {
+            thread_local std::string buffer;
+            buffer = std::move(value);
+            return buffer.c_str();
+        }
+
+        // ---- guarded calls into samp.dll ----
+        //
+        // These live in their own functions because MSVC forbids __try in a
+        // function that needs C++ unwinding. Validating the pointer chain
+        // covers the common failure (a stale/incorrect offset yielding a null
+        // or unmapped pointer); the SEH frame catches the rest instead of
+        // taking the whole game down.
+
+        using AddToChatWndFunc = void(__thiscall*)(void*, int, const char*, const char*, uint32_t, uint32_t);
+        using tSendCmd = void(__thiscall*)(void* pInput, const char* command);
+
+        bool GuardedAddToChatWnd(AddToChatWndFunc fn, void* chatInfo, const char* text, uint32_t color)
+        {
+            __try
+            {
+                fn(chatInfo, 8, text, "", color, color);
+                return true;
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                return false;
             }
         }
 
-        // Not a registered command, forward to original
-        oSendCmd(pInput, command);
+        bool GuardedSendCmd(tSendCmd fn, void* pInput, const char* command)
+        {
+            __try
+            {
+                fn(pInput, command);
+                return true;
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                return false;
+            }
+        }
+
+        // ---- chat command hook state ----
+
+        std::map<std::string, ChatCommandCallback> g_registeredCommands;
+        std::mutex g_cmdMutex;                    // guards g_registeredCommands
+        std::mutex g_cmdHookMutex;                // serialises install/uninstall
+        tSendCmd oSendCmd = nullptr;
+        std::atomic<bool> g_cmdHookInstalled{ false };
+        void* g_cmdHookTarget = nullptr;
+
+        std::string ToLower(const char* begin, const char* end)
+        {
+            std::string result(begin, end);
+            for (auto& c : result)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return result;
+        }
+
+        void __fastcall hkSendCmd(void* pInput, void* /*edx*/, const char* command)
+        {
+            if (command && command[0] == '/')
+            {
+                // Parse command name (first word after '/')
+                const char* cmdStart = command + 1;
+                const char* space = cmdStart;
+                while (*space && *space != ' ')
+                    ++space;
+
+                const std::string cmdName = ToLower(cmdStart, space);
+
+                // Copy the handler out and release the lock BEFORE invoking it.
+                // Calling user code while holding g_cmdMutex deadlocked as soon
+                // as the handler touched Register/UnregisterChatCommand.
+                ChatCommandCallback handler;
+                {
+                    std::lock_guard<std::mutex> lock(g_cmdMutex);
+                    auto it = g_registeredCommands.find(cmdName);
+                    if (it != g_registeredCommands.end())
+                        handler = it->second;
+                }
+
+                if (handler)
+                {
+                    // Skip whitespace after the command name to get params
+                    const char* params = space;
+                    while (*params == ' ')
+                        ++params;
+
+                    handler(params);
+                    return; // handled client-side, don't forward to the server
+                }
+            }
+
+            if (oSendCmd)
+                oSendCmd(pInput, command);
+        }
+
+        bool InstallCmdHook()
+        {
+            std::lock_guard<std::mutex> lock(g_cmdHookMutex);
+
+            if (g_cmdHookInstalled.load(std::memory_order_acquire))
+                return true;
+
+            const VersionProfile* profile = GetVersionProfile();
+            if (!profile || profile->fnSendCommand == 0)
+            {
+                LogError("[te::sdk::samp] No SendCommand offset for the detected SA-MP version");
+                return false;
+            }
+
+            const uintptr_t sampBase = GetSAMPBase();
+            if (!sampBase)
+            {
+                LogError("[te::sdk::samp] samp.dll is not loaded");
+                return false;
+            }
+
+            void* target = reinterpret_cast<void*>(sampBase + profile->fnSendCommand);
+
+            const MH_STATUS initStatus = MH_Initialize();
+            if (initStatus != MH_OK && initStatus != MH_ERROR_ALREADY_INITIALIZED)
+            {
+                LogError("[te::sdk::samp] MH_Initialize failed: %d", initStatus);
+                return false;
+            }
+
+            const MH_STATUS createStatus =
+                MH_CreateHook(target, reinterpret_cast<void*>(&hkSendCmd),
+                              reinterpret_cast<void**>(&oSendCmd));
+            if (createStatus != MH_OK)
+            {
+                LogError("[te::sdk::samp] MH_CreateHook(SendCommand) failed: %d", createStatus);
+                return false;
+            }
+
+            const MH_STATUS enableStatus = MH_EnableHook(target);
+            if (enableStatus != MH_OK)
+            {
+                LogError("[te::sdk::samp] MH_EnableHook(SendCommand) failed: %d", enableStatus);
+                MH_RemoveHook(target);
+                oSendCmd = nullptr;
+                return false;
+            }
+
+            g_cmdHookTarget = target;
+            g_cmdHookInstalled.store(true, std::memory_order_release);
+            return true;
+        }
+
+        void UninstallCmdHook()
+        {
+            std::lock_guard<std::mutex> lock(g_cmdHookMutex);
+
+            if (!g_cmdHookInstalled.load(std::memory_order_acquire))
+                return;
+
+            if (g_cmdHookTarget)
+            {
+                MH_DisableHook(g_cmdHookTarget);
+                MH_RemoveHook(g_cmdHookTarget);
+                g_cmdHookTarget = nullptr;
+            }
+
+            oSendCmd = nullptr;
+            g_cmdHookInstalled.store(false, std::memory_order_release);
+        }
     }
 
-    static bool InstallCmdHook()
-    {
-        const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets) return false;
-
-        uintptr_t sampBase = GetSAMPBase();
-        if (!sampBase) return false;
-
-        void* fnTarget = reinterpret_cast<void*>(sampBase + offsets->fnSendCmd);
-
-        if (MH_Initialize() != MH_OK && MH_Initialize() != MH_ERROR_ALREADY_INITIALIZED)
-        {
-            Log("[RegisterChatCommand] Failed to initialize MinHook");
-            return false;
-        }
-
-        if (MH_CreateHook(fnTarget, &hkSendCmd, reinterpret_cast<void**>(&oSendCmd)) != MH_OK)
-        {
-            Log("[RegisterChatCommand] Failed to create hook on SendCommand");
-            return false;
-        }
-
-        if (MH_EnableHook(fnTarget) != MH_OK)
-        {
-            Log("[RegisterChatCommand] Failed to enable SendCommand hook");
-            return false;
-        }
-
-        g_cmdHookInstalled = true;
-        return true;
-    }
-
-    // ---- Public Functions ----
+    // ------------------------------------------------------------------
+    // Public API
+    // ------------------------------------------------------------------
 
     bool AddChatMessage(const char* text, uint32_t color)
     {
         if (!text)
         {
-            Log("[SendChatMessage] Invalid text parameter");
+            LogWarn("[te::sdk::samp] AddChatMessage: null text");
             return false;
         }
 
-        HMODULE sampModule = GetModuleHandleA("samp.dll");
-        if (!sampModule)
+        const VersionProfile* profile = GetVersionProfile();
+        if (!profile || profile->chatInfo == 0 || profile->fnAddToChatWnd == 0)
         {
-            Log("[SendChatMessage] samp.dll not found");
+            LogWarn("[te::sdk::samp] AddChatMessage: no profile for version %s",
+                    TranslateSAMPVersion(GetSAMPVersion()).c_str());
             return false;
         }
 
-        SAMPVersion sampVersion = GetSAMPVersion();
+        const uintptr_t sampBase = GetSAMPBase();
+        if (!sampBase)
+            return false;
 
-        uintptr_t sampBase = reinterpret_cast<uintptr_t>(sampModule);
-        uintptr_t chatInfoOffset = 0;
-        uintptr_t addToChatWndOffset = 0;
-
-        switch (sampVersion)
+        void* chatInfo = nullptr;
+        if (!ReadAt(sampBase + profile->chatInfo, chatInfo) || !chatInfo)
         {
-        case SAMPVersion::R1:
-            chatInfoOffset = 0x21A0E4;
-            addToChatWndOffset = 0x64010;
-            break;
-        case SAMPVersion::R2:
-            chatInfoOffset = 0x21A0EC;
-            addToChatWndOffset = 0x640E0;
-            break;
-        case SAMPVersion::DL:
-            chatInfoOffset = 0x2ACA10;
-            addToChatWndOffset = 0x67650;
-            break;
-        case SAMPVersion::R3:
-            chatInfoOffset = 0x26E8C8;
-            addToChatWndOffset = 0x67460;
-            break;
-        case SAMPVersion::R4:
-            chatInfoOffset = 0x26E9F8;
-            addToChatWndOffset = 0x67BA0;
-            break;
-        case SAMPVersion::R4v2:
-            chatInfoOffset = 0x26E9F8;
-            addToChatWndOffset = 0x67BE0;
-            break;
-        case SAMPVersion::R5:
-            chatInfoOffset = 0x26EB80;
-            addToChatWndOffset = 0x67BE0;
-            break;
-        case SAMPVersion::Unknown:
-        default:
-            Log("[SendChatMessage] Unknown or unsupported SAMP version");
+            LogWarn("[te::sdk::samp] AddChatMessage: chat instance not ready");
             return false;
         }
 
-        try
+        auto fn = reinterpret_cast<AddToChatWndFunc>(sampBase + profile->fnAddToChatWnd);
+        if (!GuardedAddToChatWnd(fn, chatInfo, text, color))
         {
-            uintptr_t* pChatInfo = reinterpret_cast<uintptr_t*>(sampBase + chatInfoOffset);
-
-            MEMORY_BASIC_INFORMATION mbi{};
-            bool isReadable = pChatInfo != nullptr &&
-                VirtualQuery(pChatInfo, &mbi, sizeof(mbi)) &&
-                (mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE)) &&
-                !(mbi.Protect & PAGE_GUARD) &&
-                !(mbi.Protect & PAGE_NOACCESS);
-
-            if (!isReadable || !*pChatInfo)
-            {
-                Log("[SendChatMessage] Invalid chat info pointer for version %s",
-                    TranslateSAMPVersion(sampVersion).c_str());
-                return false;
-            }
-
-            uintptr_t chatInfo = *pChatInfo;
-            uintptr_t addToChatWndFunc = sampBase + addToChatWndOffset;
-
-            using AddToChatWndFunc = void(__thiscall*)(void*, int, const char*, const char*, uint32_t, uint32_t);
-            auto addToChatWnd = reinterpret_cast<AddToChatWndFunc>(addToChatWndFunc);
-
-            addToChatWnd(reinterpret_cast<void*>(chatInfo), 8, text, "", color, color);
-            return true;
-        }
-        catch (const std::exception& e)
-        {
-            Log("[SendChatMessage] Exception occurred: %s", e.what());
+            LogError("[te::sdk::samp] AddChatMessage: AddToChatWindow faulted");
             return false;
         }
-        catch (...)
-        {
-            Log("[SendChatMessage] Unknown exception occurred");
-            return false;
-        }
+
+        return true;
     }
 
     bool SendCommand(const char* command)
     {
         if (!command)
         {
-            Log("[SendCommand] Invalid command parameter");
+            LogWarn("[te::sdk::samp] SendCommand: null command");
             return false;
         }
 
-        const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets)
+        const VersionProfile* profile = GetVersionProfile();
+        if (!profile || profile->inputInfo == 0 || profile->fnSendCommand == 0)
         {
-            Log("[SendCommand] Unsupported SAMP version");
+            LogWarn("[te::sdk::samp] SendCommand: unsupported SA-MP version");
             return false;
         }
 
-        uintptr_t sampBase = GetSAMPBase();
+        const uintptr_t sampBase = GetSAMPBase();
         if (!sampBase)
-        {
-            Log("[SendCommand] samp.dll not found");
             return false;
-        }
 
-        // Get CInput pointer
-        uintptr_t pInputAddr = sampBase + offsets->pInput;
-        if (!IsValidPtr(reinterpret_cast<void*>(pInputAddr))) return false;
+        void* pInput = nullptr;
+        if (!ReadAt(sampBase + profile->inputInfo, pInput) || !pInput)
+            return false;
 
-        void* pInput = *reinterpret_cast<void**>(pInputAddr);
-        if (!IsValidPtr(pInput)) return false;
+        // Go through the trampoline when our hook is installed, so sending a
+        // command from code does not re-enter our own dispatcher.
+        tSendCmd fn = g_cmdHookInstalled.load(std::memory_order_acquire) && oSendCmd
+            ? oSendCmd
+            : reinterpret_cast<tSendCmd>(sampBase + profile->fnSendCommand);
 
-        // If the hook is installed, call through the original to avoid re-entering our hook
-        if (g_cmdHookInstalled && oSendCmd)
-        {
-            oSendCmd(pInput, command);
-        }
-        else
-        {
-            auto fnSendCmd = reinterpret_cast<tSendCmd>(sampBase + offsets->fnSendCmd);
-            fnSendCmd(pInput, command);
-        }
-
-        return true;
+        return GuardedSendCmd(fn, pInput, command);
     }
 
     const char* GetServerName()
     {
-        const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets) return "";
+        const VersionProfile* profile = GetVersionProfile();
+        if (!profile)
+            return Stabilise({});
 
         void* netGame = GetSAMPInfo();
-        if (!netGame) return "";
+        if (!netGame)
+            return Stabilise({});
 
-        return reinterpret_cast<const char*>(reinterpret_cast<uintptr_t>(netGame) + offsets->szHostname);
+        return Stabilise(CopyGameString(
+            reinterpret_cast<uintptr_t>(netGame) + profile->netGameHostname, 255));
     }
 
     const char* GetPlayerName()
     {
-        const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets) return "";
+        const VersionProfile* profile = GetVersionProfile();
+        if (!profile)
+            return Stabilise({});
 
         void* playerPool = GetPlayerPool();
-        if (!playerPool) return "";
+        if (!playerPool)
+            return Stabilise({});
 
-        uintptr_t nameAddr = reinterpret_cast<uintptr_t>(playerPool) + offsets->playerPoolLocalName;
+        const uintptr_t nameAddr =
+            reinterpret_cast<uintptr_t>(playerPool) + profile->playerPoolLocalName;
 
-        SAMPVersion ver = GetSAMPVersion();
-        if (ver == SAMPVersion::R1 || ver == SAMPVersion::R2)
-        {
-            return ReadStdString(nameAddr);
-        }
+        if (profile->localNameIsStdString)
+            return Stabilise(ReadStdString(nameAddr));
 
-        // R3+ and DL: fixed char buffer, read directly
-        if (!IsValidPtr(reinterpret_cast<void*>(nameAddr))) return "";
-        return reinterpret_cast<const char*>(nameAddr);
+        // R3+ and DL: fixed char buffer (MAX_PLAYER_NAME is 24)
+        return Stabilise(CopyGameString(nameAddr, 24));
     }
 
     uint16_t GetPlayerId()
     {
-        // SA:MP stores the local player id as a uint16 at playerPoolLocalId; reading it
-        // as a 32-bit int pulled in the adjacent struct field as the high 16 bits (garbage),
-        // so callers had to mask & 0xFFFF. Read it at its real width and return the SA:MP
-        // INVALID_PLAYER_ID sentinel (0xFFFF) on failure.
-        const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets) return 0xFFFF;
+        // SA-MP stores the local player id as a uint16. Reading it as a 32-bit
+        // int pulled the adjacent struct field in as the high 16 bits, so
+        // callers had to mask with 0xFFFF; read it at its real width instead.
+        const VersionProfile* profile = GetVersionProfile();
+        if (!profile)
+            return kInvalidPlayerId;
 
         void* playerPool = GetPlayerPool();
-        if (!playerPool) return 0xFFFF;
+        if (!playerPool)
+            return kInvalidPlayerId;
 
-        uintptr_t idAddr = reinterpret_cast<uintptr_t>(playerPool) + offsets->playerPoolLocalId;
-        if (!IsValidPtr(reinterpret_cast<void*>(idAddr))) return 0xFFFF;
+        uint16_t id = kInvalidPlayerId;
+        if (!ReadAt(reinterpret_cast<uintptr_t>(playerPool) + profile->playerPoolLocalId, id))
+            return kInvalidPlayerId;
 
-        return *reinterpret_cast<uint16_t*>(idAddr);
+        return id;
     }
 
     bool IsGameLoaded()
     {
-        const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets) return false;
+        const VersionProfile* profile = GetVersionProfile();
+        if (!profile)
+            return false;
 
         void* netGame = GetSAMPInfo();
-        if (!netGame) return false;
+        if (!netGame)
+            return false;
 
-        uintptr_t stateAddr = reinterpret_cast<uintptr_t>(netGame) + offsets->iGameState;
-        if (!IsValidPtr(reinterpret_cast<void*>(stateAddr))) return false;
+        int gameState = 0;
+        if (!ReadAt(reinterpret_cast<uintptr_t>(netGame) + profile->netGameGameState, gameState))
+            return false;
 
-        int gameState = *reinterpret_cast<int*>(stateAddr);
         return gameState >= 5;
     }
 
     bool IsPlayerSpawned()
     {
-        const SAMPOffsets* offsets = GetOffsets();
-        if (!offsets) return false;
+        const VersionProfile* profile = GetVersionProfile();
+        if (!profile)
+            return false;
 
         void* netGame = GetSAMPInfo();
-        if (!netGame) return false;
+        if (!netGame)
+            return false;
 
-        uintptr_t stateAddr = reinterpret_cast<uintptr_t>(netGame) + offsets->iGameState;
-        if (!IsValidPtr(reinterpret_cast<void*>(stateAddr))) return false;
+        int gameState = 0;
+        if (!ReadAt(reinterpret_cast<uintptr_t>(netGame) + profile->netGameGameState, gameState))
+            return false;
 
-        int gameState = *reinterpret_cast<int*>(stateAddr);
-        if (gameState != 14) return false;
+        if (gameState != 14)
+            return false;
 
-        // Verify CLocalPlayer pointer is not null
         void* playerPool = GetPlayerPool();
-        if (!playerPool) return false;
+        if (!playerPool)
+            return false;
 
-        uintptr_t localPlayerAddr = reinterpret_cast<uintptr_t>(playerPool) + offsets->playerPoolLocalPlayer;
-        if (!IsValidPtr(reinterpret_cast<void*>(localPlayerAddr))) return false;
+        void* localPlayer = nullptr;
+        if (!ReadAt(reinterpret_cast<uintptr_t>(playerPool) + profile->playerPoolLocalPlayer, localPlayer))
+            return false;
 
-        void* localPlayer = *reinterpret_cast<void**>(localPlayerAddr);
         return localPlayer != nullptr;
     }
 
     bool RegisterChatCommand(const char* cmd, ChatCommandCallback callback)
     {
-        if (!cmd || !callback)
+        if (!cmd || cmd[0] == '\0' || !callback)
         {
-            Log("[RegisterChatCommand] Invalid parameters");
+            LogWarn("[te::sdk::samp] RegisterChatCommand: invalid parameters");
             return false;
         }
 
-        // Install hook on first call
-        if (!g_cmdHookInstalled)
+        if (!InstallCmdHook())
         {
-            if (!InstallCmdHook())
-            {
-                Log("[RegisterChatCommand] Failed to install SendCommand hook");
-                return false;
-            }
+            LogError("[te::sdk::samp] RegisterChatCommand: SendCommand hook unavailable");
+            return false;
         }
 
-        // Lowercase the command name for case-insensitive matching
-        std::string cmdName(cmd);
-        for (auto& c : cmdName) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        const std::string cmdName = ToLower(cmd, cmd + strlen(cmd));
 
         std::lock_guard<std::mutex> lock(g_cmdMutex);
         g_registeredCommands[cmdName] = std::move(callback);
         return true;
+    }
+
+    bool UnregisterChatCommand(const char* cmd)
+    {
+        if (!cmd || cmd[0] == '\0')
+            return false;
+
+        const std::string cmdName = ToLower(cmd, cmd + strlen(cmd));
+
+        // Destroy the std::function outside the lock: it may own objects whose
+        // destructor calls back into the SDK.
+        ChatCommandCallback removed;
+        {
+            std::lock_guard<std::mutex> lock(g_cmdMutex);
+            auto it = g_registeredCommands.find(cmdName);
+            if (it == g_registeredCommands.end())
+                return false;
+
+            removed = std::move(it->second);
+            g_registeredCommands.erase(it);
+        }
+
+        return true;
+    }
+
+    void ClearChatCommands()
+    {
+        std::map<std::string, ChatCommandCallback> removed;
+        {
+            std::lock_guard<std::mutex> lock(g_cmdMutex);
+            removed.swap(g_registeredCommands);
+        }
+
+        UninstallCmdHook();
+        // `removed` is destroyed here, outside every SDK lock
+    }
+
+    bool IsChatCommandRegistered(const char* cmd)
+    {
+        if (!cmd || cmd[0] == '\0')
+            return false;
+
+        const std::string cmdName = ToLower(cmd, cmd + strlen(cmd));
+
+        std::lock_guard<std::mutex> lock(g_cmdMutex);
+        return g_registeredCommands.find(cmdName) != g_registeredCommands.end();
     }
 }

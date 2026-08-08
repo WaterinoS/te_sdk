@@ -71,8 +71,15 @@ class TERakClient
 public:
     TERakClient(void* rawInterface, void** originalVtable);
 
+    // False once the SDK has been shut down, or if construction was handed a
+    // null interface/vtable. Every Send*/RPC path checks this first.
+    bool IsValid() const;
+
     void* GetRawInterface() { return raw; }
     void** GetVTable() { return originalVtable; }
+
+    // Returns the original vtable entry, or nullptr when the index is out of
+    // range or the slot is not readable. Callers MUST null-check.
     void* GetOriginalRaw(size_t index);
 
     template<typename Fn>
@@ -133,6 +140,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, const char*, unsigned short, unsigned short, unsigned int, int);
             Fn fn = owner->GetOriginal<Fn>(1);
+            if (!fn) return false;
             return fn(owner->raw, host, serverPort, clientPort, depreciated, threadSleepTimer);
         }
 
@@ -140,6 +148,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, unsigned int, unsigned char);
             Fn fn = owner->GetOriginal<Fn>(2);
+            if (!fn) return;
             fn(owner->raw, blockDuration, orderingChannel);
         }
 
@@ -147,6 +156,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, const char*, const char*);
             Fn fn = owner->GetOriginal<Fn>(3);
+            if (!fn) return;
             fn(owner->raw, privKeyP, privKeyQ);
         }
 
@@ -154,6 +164,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, const char*);
             Fn fn = owner->GetOriginal<Fn>(4);
+            if (!fn) return;
             fn(owner->raw, password);
         }
 
@@ -161,6 +172,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(5);
+            if (!fn) return false;
             return fn(owner->raw);
         }
 
@@ -168,6 +180,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, const char*, int, PacketPriority, PacketReliability, char);
             Fn fn = owner->GetOriginal<Fn>(7);
+            if (!fn) return false;
             return fn(owner->raw, data, length, priority, reliability, orderingChannel);
         }
 
@@ -175,6 +188,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, RakNet::BitStream*, PacketPriority, PacketReliability, char);
             Fn fn = owner->GetOriginal<Fn>(6);
+            if (!fn) return false;
             return fn(owner->raw, bitStream, priority, reliability, orderingChannel);
         }
 
@@ -182,6 +196,7 @@ private:
         {
             using Fn = Packet * (__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(8);
+            if (!fn) return nullptr;
             return fn(owner->raw);
         }
 
@@ -189,6 +204,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, Packet*);
             Fn fn = owner->GetOriginal<Fn>(9);
+            if (!fn) return;
             fn(owner->raw, packet);
         }
 
@@ -196,6 +212,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(10);
+            if (!fn) return;
             fn(owner->raw);
         }
 
@@ -203,6 +220,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, const char*, unsigned short, unsigned short, bool);
             Fn fn = owner->GetOriginal<Fn>(11);
+            if (!fn) return;
             fn(owner->raw, host, remotePort, clientPort, onlyReplyOnAcceptingConnections);
         }
 
@@ -210,6 +228,7 @@ private:
         {
             using Fn = int(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(12);
+            if (!fn) return 0;
             return fn(owner->raw);
         }
 
@@ -217,6 +236,7 @@ private:
         {
             using Fn = int(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(13);
+            if (!fn) return 0;
             return fn(owner->raw);
         }
 
@@ -224,6 +244,7 @@ private:
         {
             using Fn = int(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(14);
+            if (!fn) return 0;
             return fn(owner->raw);
         }
 
@@ -231,6 +252,7 @@ private:
         {
             using Fn = int(__thiscall*)(void*, PlayerID);
             Fn fn = owner->GetOriginal<Fn>(15);
+            if (!fn) return 0;
             return fn(owner->raw, playerId);
         }
 
@@ -238,6 +260,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(16);
+            if (!fn) return;
             fn(owner->raw);
         }
 
@@ -245,6 +268,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(17);
+            if (!fn) return;
             fn(owner->raw);
         }
 
@@ -252,6 +276,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(18);
+            if (!fn) return false;
             return fn(owner->raw);
         }
 
@@ -259,6 +284,7 @@ private:
         {
             using Fn = unsigned int(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(19);
+            if (!fn) return 0;
             return fn(owner->raw);
         }
 
@@ -266,6 +292,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, unsigned int[256], bool);
             Fn fn = owner->GetOriginal<Fn>(20);
+            if (!fn) return false;
             return fn(owner->raw, frequencyTable, inputLayer);
         }
 
@@ -273,6 +300,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, bool);
             Fn fn = owner->GetOriginal<Fn>(21);
+            if (!fn) return false;
             return fn(owner->raw, inputLayer);
         }
 
@@ -280,6 +308,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, int*, void (*)(RPCParameters*));
             Fn fn = owner->GetOriginal<Fn>(22);
+            if (!fn) return;
             fn(owner->raw, uniqueID, functionPointer);
         }
 
@@ -287,6 +316,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, int*, void*);
             Fn fn = owner->GetOriginal<Fn>(23);
+            if (!fn) return;
             fn(owner->raw, uniqueID, obj);
         }
 
@@ -294,6 +324,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, int*);
             Fn fn = owner->GetOriginal<Fn>(24);
+            if (!fn) return;
             fn(owner->raw, uniqueID);
         }
 
@@ -301,6 +332,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, int*, const char*, unsigned int, PacketPriority, PacketReliability, char, bool);
             Fn fn = owner->GetOriginal<Fn>(26);
+            if (!fn) return false;
             return fn(owner->raw, uniqueID, data, bitLength, priority, reliability, orderingChannel, shiftTimestampByClientTime);
         }
 
@@ -308,6 +340,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, int*, RakNet::BitStream*, PacketPriority, PacketReliability, char, bool);
             Fn fn = owner->GetOriginal<Fn>(25);
+            if (!fn) return false;
             return fn(owner->raw, uniqueID, bitStream, priority, reliability, orderingChannel, shiftTimestampByClientTime);
         }
 
@@ -315,6 +348,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, int*, RakNet::BitStream*, PacketPriority, PacketReliability, char, bool, NetworkID);
             Fn fn = owner->GetOriginal<Fn>(27);
+            if (!fn) return false;
             return fn(owner->raw, uniqueID, bitStream, priority, reliability, orderingChannel, shiftTimestampByClientTime, networkID);
         }
 
@@ -322,6 +356,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, bool);
             Fn fn = owner->GetOriginal<Fn>(28);
+            if (!fn) return;
             fn(owner->raw, trackFrequencyTable);
         }
 
@@ -329,6 +364,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, unsigned int[256]);
             Fn fn = owner->GetOriginal<Fn>(29);
+            if (!fn) return false;
             return fn(owner->raw, frequencyTable);
         }
 
@@ -336,6 +372,7 @@ private:
         {
             using Fn = float(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(30);
+            if (!fn) return 0.0f;
             return fn(owner->raw);
         }
 
@@ -343,6 +380,7 @@ private:
         {
             using Fn = float(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(31);
+            if (!fn) return 0.0f;
             return fn(owner->raw);
         }
 
@@ -350,6 +388,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, void*);
             Fn fn = owner->GetOriginal<Fn>(32);
+            if (!fn) return;
             fn(owner->raw, plugin);
         }
 
@@ -357,6 +396,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, void*);
             Fn fn = owner->GetOriginal<Fn>(33);
+            if (!fn) return;
             fn(owner->raw, plugin);
         }
 
@@ -364,6 +404,7 @@ private:
         {
             using Fn = RakNet::BitStream * (__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(34);
+            if (!fn) return nullptr;
             return fn(owner->raw);
         }
 
@@ -371,6 +412,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, const char*, int);
             Fn fn = owner->GetOriginal<Fn>(35);
+            if (!fn) return;
             fn(owner->raw, data, length);
         }
 
@@ -378,6 +420,7 @@ private:
         {
             using Fn = RakNet::BitStream * (__thiscall*)(void*, PlayerID);
             Fn fn = owner->GetOriginal<Fn>(36);
+            if (!fn) return nullptr;
             return fn(owner->raw, playerId);
         }
 
@@ -385,6 +428,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, PlayerID, const char*, int);
             Fn fn = owner->GetOriginal<Fn>(37);
+            if (!fn) return;
             fn(owner->raw, playerId, data, length);
         }
 
@@ -392,6 +436,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(38);
+            if (!fn) return;
             fn(owner->raw);
         }
 
@@ -399,6 +444,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, PlayerID*);
             Fn fn = reinterpret_cast<Fn>(owner->GetOriginalRaw(39));
+            if (!fn) return PlayerID{};
             PlayerID result{};
             fn(owner->raw, &result);
             return result;
@@ -408,6 +454,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, PlayerID*);
             Fn fn = reinterpret_cast<Fn>(owner->GetOriginalRaw(40));
+            if (!fn) return PlayerID{};
             PlayerID result{};
             fn(owner->raw, &result);
             return result;
@@ -417,6 +464,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, PlayerID*);
             Fn fn = reinterpret_cast<Fn>(owner->GetOriginalRaw(41));
+            if (!fn) return PlayerID{};
             PlayerID result{};
             fn(owner->raw, &result);
             return result;
@@ -426,6 +474,7 @@ private:
         {
             using Fn = const char* (__thiscall*)(void*, PlayerID);
             Fn fn = owner->GetOriginal<Fn>(42);
+            if (!fn) return nullptr;
             return fn(owner->raw, playerId);
         }
 
@@ -433,6 +482,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, Packet*, bool);
             Fn fn = owner->GetOriginal<Fn>(43);
+            if (!fn) return;
             fn(owner->raw, packet, pushAtHead);
         }
 
@@ -440,6 +490,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, void*);
             Fn fn = owner->GetOriginal<Fn>(44);
+            if (!fn) return;
             fn(owner->raw, routerInterface);
         }
 
@@ -447,6 +498,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, void*);
             Fn fn = owner->GetOriginal<Fn>(45);
+            if (!fn) return;
             fn(owner->raw, routerInterface);
         }
 
@@ -454,6 +506,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, RakNetTime);
             Fn fn = owner->GetOriginal<Fn>(46);
+            if (!fn) return;
             fn(owner->raw, timeoutMS);
         }
 
@@ -461,6 +514,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*, int);
             Fn fn = owner->GetOriginal<Fn>(47);
+            if (!fn) return false;
             return fn(owner->raw, size);
         }
 
@@ -468,6 +522,7 @@ private:
         {
             using Fn = int(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(48);
+            if (!fn) return 0;
             return fn(owner->raw);
         }
 
@@ -475,6 +530,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, bool);
             Fn fn = owner->GetOriginal<Fn>(49);
+            if (!fn) return;
             fn(owner->raw, allow);
         }
 
@@ -482,6 +538,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, const char*, unsigned short, const char*, int);
             Fn fn = owner->GetOriginal<Fn>(50);
+            if (!fn) return;
             fn(owner->raw, host, remotePort, data, dataLength);
         }
 
@@ -489,6 +546,7 @@ private:
         {
             using Fn = RakNetStatisticsStruct* const (__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(51);
+            if (!fn) return nullptr;
             return fn(owner->raw);
         }
 
@@ -496,6 +554,7 @@ private:
         {
             using Fn = void(__thiscall*)(void*, double, unsigned short, unsigned short);
             Fn fn = owner->GetOriginal<Fn>(52);
+            if (!fn) return;
             fn(owner->raw, maxSendBPS, minExtraLatency, extraLatencyVariance);
         }
 
@@ -503,6 +562,7 @@ private:
         {
             using Fn = bool(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(53);
+            if (!fn) return false;
             return fn(owner->raw);
         }
 
@@ -510,6 +570,7 @@ private:
         {
             using Fn = PlayerIndex(__thiscall*)(void*);
             Fn fn = owner->GetOriginal<Fn>(54);
+            if (!fn) return PlayerIndex{};
             return fn(owner->raw);
         }
 

@@ -1,0 +1,57 @@
+name: build
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  msbuild:
+    name: ${{ matrix.configuration }}|x86
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+
+    env:
+      SOLUTION: '#TE SDK/#TE SDK.sln'
+      # The project targets v145 (VS2026). Hosted runners lag behind, so CI
+      # pins the toolset it actually has - the point here is to compile the
+      # sources, not to certify a specific toolset.
+      TOOLSET: v143
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore vcpkg dependencies
+        working-directory: '#TE SDK'
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install --triplet x86-windows-static-md
+        shell: pwsh
+
+      - name: Build
+        run: >
+          msbuild "$env:SOLUTION"
+          -m
+          -p:Configuration=${{ matrix.configuration }}
+          -p:Platform=x86
+          -p:PlatformToolset=$env:TOOLSET
+          -p:VcpkgEnableManifest=true
+          -p:VcpkgTriplet=x86-windows-static-md
+          -warnaserror:C4715,C4716
+        shell: pwsh
+
+      - name: Upload library
+        uses: actions/upload-artifact@v4
+        with:
+          name: te_sdk-${{ matrix.configuration }}-x86
+          path: |
+            lib/*.lib
+            lib/*.pdb
+          if-no-files-found: error

@@ -134,7 +134,11 @@ void BitStream::SetNumberOfBitsAllocated( const unsigned int lengthInBits )
 }
 
 BitStream::~BitStream() {
-	if (copyData && data != stackData && numberOfBitsAllocated > (BITSTREAM_STACK_ALLOCATION_SIZE << 3)) {
+	// ">=", not ">": constructing a copying BitStream over exactly
+	// BITSTREAM_STACK_ALLOCATION_SIZE bytes malloc()s the buffer but leaves
+	// numberOfBitsAllocated at exactly (SIZE << 3), so the strict comparison
+	// skipped the free() and leaked the allocation on every such packet.
+	if (copyData && data != stackData && numberOfBitsAllocated >= (BITSTREAM_STACK_ALLOCATION_SIZE << 3)) {
 		free(data);  // Only free if we allocated it
 	}
 }
