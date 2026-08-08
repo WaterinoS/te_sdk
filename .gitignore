@@ -45,3 +45,10 @@
 /#TE SDK/#TE SDK/Release
 /#TE SDK/Release
 /#TE SDK/.claude/settings.local.json
+
+# vcpkg (manifest mode)
+vcpkg_installed/
+/#TE SDK/vcpkg_installed/
+
+# Visual Studio user state
+*.vcxproj.user
