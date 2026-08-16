@@ -33,8 +33,27 @@ namespace te::sdk::helper::samp
         { 0x26E9FC, 0x131, 0x3CD, 0x3DE, 0x8,  0x2F1C, 0x2F20, 0x2F3A, 0x698C0 },
         // R4v2
         { 0x26E9FC, 0x131, 0x3CD, 0x3DE, 0x8,  0x2F1C, 0x2F20, 0x2F3A, 0x698C0 },
-        // R5
-        { 0x26EB84, 0x131, 0x3CD, 0x3DE, 0x4,  0x2F1C, 0x2F20, 0x2F3A, 0x69900 },
+        // R5. The three CPlayerPool offsets below USED TO BE 0x2F1C / 0x2F20 / 0x2F3A -
+        // R3/R4 values carried forward unchanged. They are wrong: R5 puts the local block
+        // back at the FRONT of CPlayerPool, and 0x2F1C..0x2F3A land in the tail of the
+        // CRemotePlayer*[1004] array (0x1F8A..0x2F3A) and on m_nLargestId respectively.
+        // The practical damage was silent and severe: GetPlayerId() read a misaligned u16
+        // out of the part of the array no real server fills, so it returned a CONSTANT 0 -
+        // every caller that asked "which player am I" was told "player 0" for the whole
+        // session, and per-player features (weapon skins, nameplate self-suppression,
+        // lagcomp self-exclusion) acted on somebody else's identity.
+        //
+        // Replacements are disassembled from the shipped 0.3.7-R5 samp.dll, not inferred:
+        //   0x04 localId     - CPlayerPool::SetPlayerScore (rva 0xE4B0) and ::SetPlayerPing
+        //                      (rva 0xE4F0) both open with `cmp ax, [ecx+4]` and take the
+        //                      local-block path when it matches; getter at rva 0x2DB0.
+        //   0x0A localName   - the constructor (rva 0x13FD0) initialises an MSVC std::string
+        //                      there: capacity 15 at +0x1E, size 0 at +0x1A, buf[0]=0 at
+        //                      +0x0A. Note it is a std::string on R5, like R1/R2 - NOT the
+        //                      fixed char buffer R3/R4/DL use (see GetPlayerName below).
+        //   0x26 localPlayer - the same constructor stores the freshly-new'd CLocalPlayer*
+        //                      (allocation size 0x324) at +0x26.
+        { 0x26EB84, 0x131, 0x3CD, 0x3DE, 0x4,  0x04,   0x0A,   0x26,   0x69900 },
     };
 
     // Maps SAMPVersion enum to g_offsets index
@@ -92,7 +111,7 @@ namespace te::sdk::helper::samp
         return IsValidPtr(playerPool) ? playerPool : nullptr;
     }
 
-    // Read MSVC x86 std::string from memory (R1/R2 only)
+    // Read MSVC x86 std::string from memory (R1/R2/R5 - see GetPlayerName)
     // Layout: [16-byte SSO buffer][4-byte size][4-byte capacity] = 24 bytes
     static const char* ReadStdString(uintptr_t addr)
     {
@@ -345,12 +364,16 @@ namespace te::sdk::helper::samp
         uintptr_t nameAddr = reinterpret_cast<uintptr_t>(playerPool) + offsets->playerPoolLocalName;
 
         SAMPVersion ver = GetSAMPVersion();
-        if (ver == SAMPVersion::R1 || ver == SAMPVersion::R2)
+        // R5 belongs with R1/R2, not with R3/R4: its local name is a std::string (proven in
+        // the constructor at rva 0x13FD0 - see the offset table). It was being read as a raw
+        // char buffer, which on an SSO string happens to look right and on a heap-allocated
+        // one (a name longer than 15 characters) hands back the raw POINTER bytes as text.
+        if (ver == SAMPVersion::R1 || ver == SAMPVersion::R2 || ver == SAMPVersion::R5)
         {
             return ReadStdString(nameAddr);
         }
 
-        // R3+ and DL: fixed char buffer, read directly
+        // R3/R4/DL: fixed char buffer, read directly
         if (!IsValidPtr(reinterpret_cast<void*>(nameAddr))) return "";
         return reinterpret_cast<const char*>(nameAddr);
     }
